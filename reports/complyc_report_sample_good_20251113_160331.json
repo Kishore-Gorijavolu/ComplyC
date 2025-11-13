@@ -1,0 +1,13 @@
+{
+  "files": [
+    {
+      "file": "examples/sample_good.c",
+      "violations": []
+    }
+  ],
+  "summary": {
+    "total_files": 1,
+    "total_violations": 0,
+    "by_severity": {}
+  }
+}

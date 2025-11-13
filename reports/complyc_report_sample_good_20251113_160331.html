@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html><head><meta charset='UTF-8'>
+<title>ComplyC Report</title>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1, h2 { color: #333; }
+.summary-table, .violations-table {
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  width: 100%;
+}
+.summary-table th, .summary-table td,
+.violations-table th, .violations-table td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+.violations-table th {
+  background-color: #f2f2f2;
+}
+.severity-critical { color: #b30000; font-weight: bold; }
+.severity-major { color: #cc6600; font-weight: bold; }
+.severity-minor { color: #666600; }
+.severity-unspecified { color: #555; }
+.file-header { background: #e9f0fb; padding: 8px; margin-top: 20px; border-left: 4px solid #4a78c2; }
+</style>
+
+</head><body>
+<h1>ComplyC – Coding Style Report</h1>
+<h2>Summary</h2>
+<table class='summary-table'>
+<tr><th>Total files</th><td>1</td></tr>
+<tr><th>Total violations</th><td>0</td></tr>
+<tr><th>Violations by severity</th><td><ul>
+</ul></td></tr>
+</table>
+<div class='file-header'><h2>File: examples/sample_good.c</h2>
+<p>Total violations: 0</p></div>
+<p>No violations ✅</p>
+</body></html>

@@ -1,0 +1,206 @@
+style:
+  id: complyc_default
+  name: "ComplyC Default C Style"
+  version: "1.0"
+  description: "Coding guideline for safety-critical embedded C."
+  target_language: "C"
+
+rules:
+  - id: NAMING_FUNC_001
+    title: "Function names must be lower_snake_case"
+    scope: function
+    check: regex
+    pattern: "^[a-z][a-z0-9_]*$"
+    severity: major
+    guidance: "Rename function to lower_snake_case (e.g. rom_calc_crc16)."
+    reference: "§3.2.1 Function Naming"
+
+  - id: NAMING_GLOBAL_001
+    title: "Global variables must start with g_"
+    scope: file
+    check: global_naming
+    pattern: "^g_[a-z0-9_]+$"
+    severity: major
+    guidance: "Prefix global variable names with g_."
+    reference: "§3.2.2 Global Variable Naming"
+
+  - id: NAMING_STATIC_001
+    title: "File-static variables must start with s_"
+    scope: static_variable
+    check: regex
+    pattern: "^s_[a-z0-9_]+$"
+    severity: minor
+    guidance: "Prefix file-local static variables with s_."
+    reference: "§3.2.3 Static Variable Naming"
+
+  - id: NAMING_MACRO_001
+    title: "Macros must be UPPER_SNAKE_CASE"
+    scope: macro
+    check: regex
+    pattern: "^[A-Z][A-Z0-9_]*$"
+    severity: major
+    guidance: "Use upper_snake_case for macro names."
+    reference: "§3.2.4 Macro Naming"
+
+  - id: NAMING_VAR_003
+    title: "Variable names must not exceed 31 characters"
+    scope: variable
+    check: max_length
+    max_length: 31
+    severity: minor
+    guidance: "Shorten names to comply with ANSI C."
+    reference: "§2.2 Variable Names"
+
+  - id: NAMING_VAR_004
+    title: "Single-letter variable names are forbidden"
+    scope: variable
+    check: forbid_single_letter
+    allowed_exceptions: ["i", "j", "k"]
+    severity: minor
+    guidance: "Use descriptive names."
+    reference: "§2.2 Variable Names"
+
+  - id: FILE_HEADER_001
+    title: "Each C file must start with a standard header comment"
+    scope: file
+    check: file_header_contains
+    required_lines:
+      - "Module Name:"
+      - "Description:"
+      - "Author:"
+      - "Version:"
+    severity: major
+    guidance: "Use standard file header."
+    reference: "§2.1 File Header Template"
+
+  - id: DOC_FUNC_001
+    title: "Public functions must have Doxygen header"
+    scope: function
+    check: preceding_comment
+    requires_doxygen: true
+    severity: major
+    guidance: "Document public API functions."
+    reference: "§4.1 Function Documentation"
+
+  - id: MAGIC_NUMBER_001
+    title: "Magic numbers must be replaced with named constants"
+    scope: literal
+    check: magic_number
+    ignore_values: [0, 1, -1]
+    severity: minor
+    guidance: "Replace literals with constants."
+    reference: "§8.1 Magic Numbers"
+
+  - id: FIXEDPOINT_COMMENT_001
+    title: "Binary point changes must be documented"
+    scope: expression
+    check: binary_point_comment_required
+    severity: minor
+    guidance: "Document binary point transitions."
+    reference: "§7.2 Changing Binary Point"
+
+  - id: FORMAT_INDENT_001
+    title: "Indentation must be consistent"
+    scope: file
+    check: consistent_indentation
+    severity: minor
+    guidance: "Use either tabs or spaces consistently."
+    reference: "§3 Indentation"
+
+  - id: FORMAT_BRACE_001
+    title: "Curly braces required for all control bodies"
+    scope: block
+    check: require_braces
+    severity: major
+    guidance: "Always use braces."
+    reference: "§5 Loops"
+
+  - id: BRACE_STYLE_002
+    title: "Opening brace must be on its own line"
+    scope: block
+    check: brace_own_line
+    severity: major
+    guidance: "Place '{' on a new line."
+    reference: "§3 Indentation"
+
+  - id: SAFETY_RECURSION_001
+    title: "Recursion is forbidden"
+    scope: function
+    check: no_recursion
+    severity: critical
+    guidance: "Rewrite recursive logic."
+    reference: "Safety Rule"
+
+  - id: SAFETY_DYNAMIC_MEM_001
+    title: "Dynamic memory allocation is forbidden"
+    scope: call_expression
+    check: forbidden_functions
+    functions: ["malloc", "calloc", "realloc", "free"]
+    severity: critical
+    guidance: "Do not use heap memory."
+    reference: "Safety Rule"
+
+  - id: LOOP_INFINITE_001
+    title: "Infinite loops are forbidden"
+    scope: loop_statement
+    check: no_infinite_loops
+    severity: critical
+    forbidden_patterns:
+      - "for(;;)"
+      - "while(1)"
+      - "while(true)"
+    guidance: "Use bounded loops."
+    reference: "§12 Infinite Loops"
+
+  - id: FORBIDDEN_GOTO_001
+    title: "goto is forbidden"
+    scope: statement
+    check: forbid_keyword
+    keyword: "goto"
+    severity: major
+    guidance: "Use structured flow."
+    reference: "§7 Forbidden"
+
+  - id: CTRL_ELSEIF_001
+    title: "Every if/else-if chain must end with else"
+    scope: if_statement
+    check: elseif_must_end_with_else
+    severity: major
+    guidance: "Add final else."
+    reference: "§11 If/Else"
+
+  - id: FUNC_SIZE_001
+    title: "Functions must not exceed 40 lines"
+    scope: function
+    check: max_function_length
+    max_lines: 40
+    severity: major
+    guidance: "Refactor large functions."
+    reference: "Industry Practice"
+
+  - id: FUNC_CC_001
+    title: "Cyclomatic complexity must not exceed 10"
+    scope: function
+    check: max_cyclomatic_complexity
+    max_cc: 10
+    severity: major
+    guidance: "Reduce complexity."
+    reference: "Industry Practice"
+
+  - id: FUNC_NESTING_001
+    title: "Maximum nesting depth is limited to 4"
+    scope: function
+    check: max_nesting_depth
+    max_depth: 4
+    severity: major
+    guidance: "Flatten logic."
+    reference: "Industry Practice"
+
+  - id: FUNC_PARAMS_001
+    title: "Functions must not have more than 6 parameters"
+    scope: function
+    check: max_parameter_count
+    max_parameters: 6
+    severity: minor
+    guidance: "Reduce argument count."
+    reference: "Industry Practice"
