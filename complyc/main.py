@@ -53,10 +53,36 @@ def main():
         action="store_true",
         help="Delete all existing files inside the reports folder before generating new reports",
     )
+    parser.add_argument(
+        "--use-gcc",
+        action="store_true",
+        help="Force use of GCC (-E -P) as a preprocessor (overrides YAML).",
+    )
+    parser.add_argument(
+        "--no-gcc",
+        action="store_true",
+        help="Force use of builtin regex preprocessor (overrides YAML).",
+    )
     parser.add_argument("files", nargs="+", help="C source files to analyze")
     args = parser.parse_args()
 
+    # Load style + rules from YAML
     style, rules = load_rules(args.rules)
+    style = style or {}
+
+    # Base mode from YAML
+    preproc_mode = str(style.get("preprocessor", "builtin")).lower()
+
+    # Decide final use_gcc based on CLI override + YAML
+    if args.use_gcc:
+        use_gcc = True
+    elif args.no_gcc:
+        use_gcc = False
+    else:
+        use_gcc = (preproc_mode == "gcc")
+
+    print("[ComplyC] Preprocessor mode:",
+          "GCC (-E -P)" if use_gcc else "builtin regex stripper")
 
     per_file_violations = {}
     severity_counter = Counter()
@@ -64,7 +90,8 @@ def main():
 
     # ---------- Per-file analysis ----------
     for path in args.files:
-        ast = parse_c_file(path)
+        # parse with or without GCC, depending on resolved mode
+        ast = parse_c_file(path, use_gcc=use_gcc)
         violations = run_rules(ast, rules, path)
         per_file_violations[path] = violations
 
@@ -100,7 +127,6 @@ def main():
     print("=================================================\n")
 
     # ---------- Reports (JSON / HTML) ----------
-    # Ensure reports dir exists if we are going to write anything
     reports_dir = ensure_reports_dir()
 
     if args.clean_reports:

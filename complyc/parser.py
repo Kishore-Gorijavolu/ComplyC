@@ -1,6 +1,13 @@
 import re
+import subprocess
+import tempfile
+import os
 from pycparser import CParser, c_ast
 
+
+# ============================================================
+#   Lightweight Built-in Preprocessing (original behavior)
+# ============================================================
 
 def remove_c_comments(code: str) -> str:
     """
@@ -81,23 +88,93 @@ def preprocess_code_for_pycparser(code: str) -> str:
     return with_typedefs
 
 
-def parse_c_file(path: str) -> c_ast.FileAST:
-    """
-    Read a C source file, perform light preprocessing, and parse into a pycparser AST.
+# ============================================================
+#   GCC-based Preprocessing (new option)
+# ============================================================
 
-    Steps:
-    - Read the raw .c file.
-    - Strip comments and preprocessor directives.
-    - Inject minimal typedefs for fixed-width integer types and bool.
-    - Parse the cleaned code with CParser.
+def preprocess_with_gcc(path: str) -> str:
+    """
+    Use GCC as a preprocessor on the given source file.
+
+    Command used:
+        gcc -E -P <path> -o <temp_file>
+
+    -E : only run the preprocessor
+    -P : inhibit linemarkers (#line), which confuse pycparser
+
+    Returns:
+        The preprocessed code as a string with injected fake typedefs.
+    """
+    # Create a temporary output file for gcc -E
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".c") as tmp:
+        tmp_out_path = tmp.name
+
+    cmd = ["gcc", "-E", "-P", path, "-o", tmp_out_path]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print("[ComplyC] GCC preprocessing failed.")
+        print("[ComplyC] Command :", " ".join(cmd))
+        print("[ComplyC] Stdout  :", e.stdout)
+        print("[ComplyC] Stderr  :", e.stderr)
+        # Re-raise so the caller can decide how to handle it
+        raise
+
+    # Read the preprocessed file
+    try:
+        with open(tmp_out_path, "r", encoding="utf-8") as f:
+            preprocessed_code = f.read()
+    finally:
+        # Best-effort cleanup of the temporary file
+        try:
+            os.remove(tmp_out_path)
+        except OSError:
+            pass
+
+    # We still inject minimal typedefs for fixed-width types / bool
+    # in case the real headers weren't pulled in.
+    return inject_fake_typedefs(preprocessed_code)
+
+
+# ============================================================
+#   Main entry for parsing C files
+# ============================================================
+
+def parse_c_file(path: str, use_gcc: bool = False) -> c_ast.FileAST:
+    """
+    Read a C source file, preprocess it, and parse into a pycparser AST.
+
+    Parameters:
+        path    : Path to a .c file.
+        use_gcc : If True, use GCC (-E -P) as a real preprocessor.
+                  If False, use the lightweight regex-based preprocessing.
+
+    Steps (lightweight mode):
+        - Read the raw .c file.
+        - Strip comments and preprocessor directives.
+        - Inject minimal typedefs for fixed-width integer types and bool.
+        - Parse the cleaned code with CParser.
+
+    Steps (GCC mode):
+        - Run 'gcc -E -P' on the file.
+        - Inject minimal typedefs.
+        - Parse the preprocessed code with CParser.
 
     Returns:
         pycparser.c_ast.FileAST representing the translation unit.
     """
-    with open(path, "r", encoding="utf-8") as f:
-        code = f.read()
-
-    cleaned_code = preprocess_code_for_pycparser(code)
+    if use_gcc:
+        cleaned_code = preprocess_with_gcc(path)
+    else:
+        with open(path, "r", encoding="utf-8") as f:
+            code = f.read()
+        cleaned_code = preprocess_code_for_pycparser(code)
 
     parser = CParser()
     return parser.parse(cleaned_code, filename=path)

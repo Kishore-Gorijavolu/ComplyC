@@ -5,6 +5,11 @@ style:
   description: "Coding guideline for safety-critical embedded C."
   target_language: "C"
 
+  # ComplyC preprocessor mode:
+  #   "builtin" -> old regex stripper (no real compiler needed)
+  #   "gcc"     -> use GCC -E -P for accurate preprocessing
+  preprocessor: "gcc"
+
 rules:
   - id: NAMING_FUNC_001
     title: "Function names must be lower_snake_case"

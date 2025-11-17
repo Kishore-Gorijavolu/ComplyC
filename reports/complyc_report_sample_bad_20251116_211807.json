@@ -1,12 +1,12 @@
 {
   "files": [
     {
-      "file": "examples/sample_bad.c",
+      "file": "examples\\sample_bad.c",
       "violations": [
         {
           "rule_id": "FILE_HEADER_001",
           "message": "File is missing header entries: Module Name:, Description:, Author:, Version:. Use standard file header.",
-          "file": "examples/sample_bad.c",
+          "file": "examples\\sample_bad.c",
           "line": 1,
           "severity": "major",
           "reference": "\u00a72.1 File Header Template"
@@ -14,7 +14,7 @@
         {
           "rule_id": "MAGIC_NUMBER_001",
           "message": "Magic number '10' detected. Replace literals with constants.",
-          "file": "examples/sample_bad.c",
+          "file": "examples\\sample_bad.c",
           "line": 11,
           "severity": "minor",
           "reference": "\u00a78.1 Magic Numbers"
@@ -22,7 +22,7 @@
         {
           "rule_id": "MAGIC_NUMBER_001",
           "message": "Magic number '42' detected. Replace literals with constants.",
-          "file": "examples/sample_bad.c",
+          "file": "examples\\sample_bad.c",
           "line": 14,
           "severity": "minor",
           "reference": "\u00a78.1 Magic Numbers"
