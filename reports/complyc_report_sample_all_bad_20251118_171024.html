@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html><head><meta charset='UTF-8'>
+<title>ComplyC Report</title>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1, h2 { color: #333; }
+.summary-table, .violations-table {
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  width: 100%;
+}
+.summary-table th, .summary-table td,
+.violations-table th, .violations-table td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+.violations-table th {
+  background-color: #f2f2f2;
+}
+.severity-critical { color: #b30000; font-weight: bold; }
+.severity-major { color: #cc6600; font-weight: bold; }
+.severity-minor { color: #666600; }
+.severity-unspecified { color: #555; }
+.file-header { background: #e9f0fb; padding: 8px; margin-top: 20px; border-left: 4px solid #4a78c2; }
+</style>
+
+</head><body>
+<h1>ComplyC – Coding Style Report</h1>
+<h2>Summary</h2>
+<table class='summary-table'>
+<tr><th>Total files</th><td>1</td></tr>
+<tr><th>Total violations</th><td>45</td></tr>
+<tr><th>Violations by severity</th><td><ul>
+<li class='severity-major'>major: 8</li>
+<li class='severity-minor'>minor: 35</li>
+<li class='severity-critical'>critical: 2</li>
+</ul></td></tr>
+</table>
+<div class='file-header'><h2>File: examples/sample_all_bad.c</h2>
+<p>Total violations: 45</p></div>
+<table class='violations-table'>
+<tr><th>Line</th><th>Rule ID</th><th>Severity</th><th>Message</th><th>Reference</th></tr>
+<tr><td>14</td><td>NAMING_FUNC_001</td><td class='severity-major'>major</td><td>Name &#x27;BadFunctionName&#x27; does not match pattern &#x27;^[a-z][a-z0-9_]*$&#x27;. Rename function to lower_snake_case (e.g. rom_calc_crc16).</td><td>§3.2.1 Function Naming</td></tr>
+<tr><td>10</td><td>NAMING_GLOBAL_001</td><td class='severity-major'>major</td><td>Global variable &#x27;bad_global_counter&#x27; does not match pattern &#x27;^g_[a-z0-9_]+$&#x27;. Prefix global variable names with g_.</td><td>§3.2.2 Global Variable Naming</td></tr>
+<tr><td>11</td><td>NAMING_GLOBAL_001</td><td class='severity-major'>major</td><td>Global variable &#x27;fileStaticCounter&#x27; does not match pattern &#x27;^g_[a-z0-9_]+$&#x27;. Prefix global variable names with g_.</td><td>§3.2.2 Global Variable Naming</td></tr>
+<tr><td>12</td><td>NAMING_GLOBAL_001</td><td class='severity-major'>major</td><td>Global variable &#x27;variable_name_that_is_definitely_longer_than_thirty_one_chars&#x27; does not match pattern &#x27;^g_[a-z0-9_]+$&#x27;. Prefix global variable names with g_.</td><td>§3.2.2 Global Variable Naming</td></tr>
+<tr><td>11</td><td>NAMING_STATIC_001</td><td class='severity-minor'>minor</td><td>Name &#x27;fileStaticCounter&#x27; does not match pattern &#x27;^s_[a-z0-9_]+$&#x27;. Prefix file-local static variables with s_.</td><td>§3.2.3 Static Variable Naming</td></tr>
+<tr><td>1</td><td>FILE_HEADER_001</td><td class='severity-major'>major</td><td>File is missing header entries: Module Name:, Description:, Author:, Version:. Use standard file header.</td><td>§2.1 File Header Template</td></tr>
+<tr><td>16</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>17</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;42&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>18</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;5&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>20</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>22</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;7&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>24</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;3&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>33</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>36</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>53</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>55</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>76</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>77</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;128&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>79</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>80</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;20&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>81</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;30&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>85</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>88</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;20&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>91</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;30&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>94</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;40&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>102</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>105</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>114</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;100&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>118</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;50&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>131</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>150</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>152</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;3&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>153</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;2&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>153</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;3&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>153</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;4&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>153</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;5&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>153</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;6&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>153</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;7&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>154</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;5&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>33</td><td>SAFETY_DYNAMIC_MEM_001</td><td class='severity-critical'>critical</td><td>Call to forbidden function &#x27;malloc&#x27;. Do not use heap memory.</td><td>Safety Rule</td></tr>
+<tr><td>40</td><td>SAFETY_DYNAMIC_MEM_001</td><td class='severity-critical'>critical</td><td>Call to forbidden function &#x27;free&#x27;. Do not use heap memory.</td><td>Safety Rule</td></tr>
+<tr><td>72</td><td>FUNC_SIZE_001</td><td class='severity-major'>major</td><td>Function &#x27;giant_bad_function&#x27; has 67 lines (max 40). Refactor large functions.</td><td>Industry Practice</td></tr>
+<tr><td>72</td><td>FUNC_CC_001</td><td class='severity-major'>major</td><td>Function &#x27;giant_bad_function&#x27; has CC=14 (max 10). Reduce complexity.</td><td>Industry Practice</td></tr>
+<tr><td>72</td><td>FUNC_NESTING_001</td><td class='severity-major'>major</td><td>Function &#x27;giant_bad_function&#x27; nesting depth=5 (max 4). Flatten logic.</td><td>Industry Practice</td></tr>
+<tr><td>68</td><td>FUNC_PARAMS_001</td><td class='severity-minor'>minor</td><td>Function &#x27;function_with_too_many_params&#x27; has 7 parameters (max 6). Reduce argument count.</td><td>Industry Practice</td></tr>
+</table>
+</body></html>

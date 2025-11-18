@@ -1,0 +1,378 @@
+{
+  "files": [
+    {
+      "file": "examples/sample_all_bad.c",
+      "violations": [
+        {
+          "rule_id": "NAMING_FUNC_001",
+          "message": "Name 'BadFunctionName' does not match pattern '^[a-z][a-z0-9_]*$'. Rename function to lower_snake_case (e.g. rom_calc_crc16).",
+          "file": "examples/sample_all_bad.c",
+          "line": 14,
+          "severity": "major",
+          "reference": "\u00a73.2.1 Function Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'bad_global_counter' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "examples/sample_all_bad.c",
+          "line": 10,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'fileStaticCounter' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "examples/sample_all_bad.c",
+          "line": 11,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'variable_name_that_is_definitely_longer_than_thirty_one_chars' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "examples/sample_all_bad.c",
+          "line": 12,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_STATIC_001",
+          "message": "Name 'fileStaticCounter' does not match pattern '^s_[a-z0-9_]+$'. Prefix file-local static variables with s_.",
+          "file": "examples/sample_all_bad.c",
+          "line": 11,
+          "severity": "minor",
+          "reference": "\u00a73.2.3 Static Variable Naming"
+        },
+        {
+          "rule_id": "FILE_HEADER_001",
+          "message": "File is missing header entries: Module Name:, Description:, Author:, Version:. Use standard file header.",
+          "file": "examples/sample_all_bad.c",
+          "line": 1,
+          "severity": "major",
+          "reference": "\u00a72.1 File Header Template"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 16,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '42' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 17,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '5' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 18,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 20,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '7' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 22,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '3' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 24,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 33,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 36,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 53,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 55,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 76,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '128' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 77,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 79,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '20' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 80,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '30' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 81,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 85,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '20' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 88,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '30' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 91,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '40' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 94,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 102,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 105,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '100' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 114,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '50' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 118,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 131,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 150,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '3' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 152,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 153,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '3' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 153,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '4' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 153,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '5' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 153,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '6' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 153,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '7' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 153,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '5' detected. Replace literals with constants.",
+          "file": "examples/sample_all_bad.c",
+          "line": 154,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "SAFETY_DYNAMIC_MEM_001",
+          "message": "Call to forbidden function 'malloc'. Do not use heap memory.",
+          "file": "examples/sample_all_bad.c",
+          "line": 33,
+          "severity": "critical",
+          "reference": "Safety Rule"
+        },
+        {
+          "rule_id": "SAFETY_DYNAMIC_MEM_001",
+          "message": "Call to forbidden function 'free'. Do not use heap memory.",
+          "file": "examples/sample_all_bad.c",
+          "line": 40,
+          "severity": "critical",
+          "reference": "Safety Rule"
+        },
+        {
+          "rule_id": "FUNC_SIZE_001",
+          "message": "Function 'giant_bad_function' has 67 lines (max 40). Refactor large functions.",
+          "file": "examples/sample_all_bad.c",
+          "line": 72,
+          "severity": "major",
+          "reference": "Industry Practice"
+        },
+        {
+          "rule_id": "FUNC_CC_001",
+          "message": "Function 'giant_bad_function' has CC=14 (max 10). Reduce complexity.",
+          "file": "examples/sample_all_bad.c",
+          "line": 72,
+          "severity": "major",
+          "reference": "Industry Practice"
+        },
+        {
+          "rule_id": "FUNC_NESTING_001",
+          "message": "Function 'giant_bad_function' nesting depth=5 (max 4). Flatten logic.",
+          "file": "examples/sample_all_bad.c",
+          "line": 72,
+          "severity": "major",
+          "reference": "Industry Practice"
+        },
+        {
+          "rule_id": "FUNC_PARAMS_001",
+          "message": "Function 'function_with_too_many_params' has 7 parameters (max 6). Reduce argument count.",
+          "file": "examples/sample_all_bad.c",
+          "line": 68,
+          "severity": "minor",
+          "reference": "Industry Practice"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_files": 1,
+    "total_violations": 45,
+    "by_severity": {
+      "major": 8,
+      "minor": 35,
+      "critical": 2
+    }
+  }
+}
