@@ -28,43 +28,43 @@ def remove_c_comments(code: str) -> str:
 
 def remove_preprocessor_directives(code: str) -> str:
     """
-    Remove preprocessor directive lines such as:
-        #include <...>
-        #define FOO 123
-        #if / #ifdef / #endif etc.
+    Remove lines that start with '#' (preprocessor directives).
 
-    pycparser expects **preprocessed C** (without raw # directives).
-    For ComplyC, we only need the core syntax and structure of the code,
-    so it is safe to strip these lines for style / safety checks.
+    This keeps things simple for pycparser by stripping:
+      - #include ...
+      - #define ...
+      - #if/#ifdef/#ifndef/#else/#endif
+      - #pragma ...
     """
-    lines = code.splitlines()
-    kept_lines = []
-
-    for line in lines:
-        # If the line starts with '#' after optional whitespace, drop it.
-        if line.lstrip().startswith("#"):
+    cleaned_lines = []
+    for line in code.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            # Skip preprocessor lines
             continue
-        kept_lines.append(line)
-
-    return "\n".join(kept_lines)
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
 
 
 def inject_fake_typedefs(code: str) -> str:
     """
-    Inject minimal typedefs for common fixed-width types and bool so that
-    pycparser can parse code using uint16_t, int32_t, etc. *without* needing
-    the real <stdint.h> or <stdbool.h>.
+    Inject a small set of typedefs for common fixed-width integer types
+    and bool, so that pycparser can parse code that relies on <stdint.h>
+    and <stdbool.h> without pulling real system headers (which may use
+    non-standard extensions).
 
-    These typedefs are only for parsing; they don't need to match exact sizes.
+    If your project needs more, extend this list as needed.
     """
     fake_typedefs = """
-typedef signed char        int8_t;
-typedef unsigned char      uint8_t;
-typedef short              int16_t;
-typedef unsigned short     uint16_t;
-typedef int                int32_t;
-typedef unsigned int       uint32_t;
-typedef _Bool              bool;
+typedef signed char         int8_t;
+typedef unsigned char       uint8_t;
+typedef short               int16_t;
+typedef unsigned short      uint16_t;
+typedef int                 int32_t;
+typedef unsigned int        uint32_t;
+typedef long long           int64_t;
+typedef unsigned long long  uint64_t;
+typedef _Bool               bool;
 """
     # Put typedefs at the very top so they are visible everywhere.
     return fake_typedefs + "\n" + code
@@ -78,9 +78,6 @@ def preprocess_code_for_pycparser(code: str) -> str:
     2. Remove preprocessor directives (lines starting with '#').
     3. Inject fake typedefs for stdint/bool types so pycparser can parse
        code that originally relied on <stdint.h> and <stdbool.h>.
-
-    This keeps the logic and structure of the code intact for analysis
-    while avoiding constructs pycparser cannot parse directly.
     """
     no_comments = remove_c_comments(code)
     no_pp = remove_preprocessor_directives(no_comments)
@@ -89,7 +86,7 @@ def preprocess_code_for_pycparser(code: str) -> str:
 
 
 # ============================================================
-#   GCC-based Preprocessing (new option)
+#   GCC-based Preprocessing (optional mode)
 # ============================================================
 
 def preprocess_with_gcc(path: str) -> str:
@@ -105,19 +102,25 @@ def preprocess_with_gcc(path: str) -> str:
     Returns:
         The preprocessed code as a string with injected fake typedefs.
     """
-    # Create a temporary output file for gcc -E
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".c") as tmp:
-        tmp_out_path = tmp.name
+    # Create a temporary file to hold the preprocessed output
+    fd, tmp_out_path = tempfile.mkstemp(suffix=".c", prefix="complyc_gcc_")
+    os.close(fd)  # We only need the path; gcc will write to it directly.
 
-    cmd = ["gcc", "-E", "-P", path, "-o", tmp_out_path]
+    cmd = ["gcc", "-E", "-P", "-I", "fake_libc_include", path, "-o", tmp_out_path]
 
     try:
+        # Capture stdout/stderr for debugging if something goes wrong
         result = subprocess.run(
             cmd,
             check=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
         )
+    except FileNotFoundError:
+        print("[ComplyC] ERROR: gcc not found on system PATH.")
+        print("[ComplyC] Hint: Install GCC or remove --use-gcc / set preprocessor: 'builtin'.")
+        raise
     except subprocess.CalledProcessError as e:
         print("[ComplyC] GCC preprocessing failed.")
         print("[ComplyC] Command :", " ".join(cmd))
@@ -137,9 +140,63 @@ def preprocess_with_gcc(path: str) -> str:
         except OSError:
             pass
 
-    # We still inject minimal typedefs for fixed-width types / bool
-    # in case the real headers weren't pulled in.
+    # Inject minimal typedefs for fixed-width types / bool
     return inject_fake_typedefs(preprocessed_code)
+
+
+# ============================================================
+#   GCC output sanitization for pycparser
+# ============================================================
+
+def sanitize_gcc_output_for_pycparser(code: str) -> str:
+    """
+    Hard sanitize GCC output so pycparser can parse the result reliably.
+    This removes ALL GNU/builtin/system-header constructs.
+    """
+
+    # Drop ALL lines containing these GNU keywords
+    forbidden = [
+        r'__gnuc_va_list',
+        r'__builtin_va_list',
+        r'__builtin_',
+        r'__va_list_tag',
+        r'__asm__',
+        r'__asm',
+        r'__inline__',
+        r'__inline',
+        r'__attribute__',
+        r'__extension__',
+        r'__restrict__',
+        r'__restrict',
+        r'__typeof__',
+        r'__label__'
+    ]
+
+    for pat in forbidden:
+        code = re.sub(rf'^.*{pat}.*$', '', code, flags=re.MULTILINE)
+
+    # Also remove any typedef or struct that starts with __ or _
+    code = re.sub(r'^typedef\s+.*__.*$', '', code, flags=re.MULTILINE)
+    code = re.sub(r'^struct\s+__.*$', '', code, flags=re.MULTILINE)
+    code = re.sub(r'^union\s+__.*$', '', code, flags=re.MULTILINE)
+
+    # Remove any __attribute__((...)) patterns
+    code = re.sub(r'__attribute__\s*\(\([^)]*\)\)', '', code)
+
+    # Remove leftover compiler-specific tokens
+    code = re.sub(r'\b__\w+\b', '', code)
+
+    # Remove any line with standalone parenthesis (causes parse errors)
+    code = re.sub(r'^\s*\(\s*\)\s*$', '', code, flags=re.MULTILINE)
+    code = re.sub(r'^\s*\(\s*$', '', code, flags=re.MULTILINE)
+
+    # Remove empty lines created by filtering
+    cleaned_lines = []
+    for line in code.splitlines():
+        if line.strip() == "":
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
 
 
 # ============================================================
@@ -164,6 +221,7 @@ def parse_c_file(path: str, use_gcc: bool = False) -> c_ast.FileAST:
     Steps (GCC mode):
         - Run 'gcc -E -P' on the file.
         - Inject minimal typedefs.
+        - Sanitize GCC-specific constructs (__gnuc_va_list, attributes, etc.).
         - Parse the preprocessed code with CParser.
 
     Returns:
@@ -171,6 +229,7 @@ def parse_c_file(path: str, use_gcc: bool = False) -> c_ast.FileAST:
     """
     if use_gcc:
         cleaned_code = preprocess_with_gcc(path)
+        cleaned_code = sanitize_gcc_output_for_pycparser(cleaned_code)
     else:
         with open(path, "r", encoding="utf-8") as f:
             code = f.read()
