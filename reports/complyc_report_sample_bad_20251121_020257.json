@@ -1,0 +1,90 @@
+{
+  "files": [
+    {
+      "file": "examples/sample_bad.c",
+      "violations": [
+        {
+          "rule_id": "FILE_HEADER_001",
+          "message": "File is missing header entries: Module Name:, Description:, Author:, Version:. Use standard file header.",
+          "file": "examples/sample_bad.c",
+          "line": 1,
+          "severity": "major",
+          "reference": "\u00a72.1 File Header Template"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '10' detected. Replace literals with constants.",
+          "file": "examples/sample_bad.c",
+          "line": 11,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '42' detected. Replace literals with constants.",
+          "file": "examples/sample_bad.c",
+          "line": 14,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "UNINIT_VAR_001",
+          "message": "Variable 'b' may be used uninitialized in function 'foo'. Ensure all variables are assigned on all execution paths before they are read.",
+          "file": "examples/sample_bad.c",
+          "line": 10,
+          "severity": "critical",
+          "reference": "MISRA C:2012 Rule 9.1 (conceptually similar)"
+        },
+        {
+          "rule_id": "UNINIT_VAR_001",
+          "message": "Variable 'a' may be used uninitialized in function 'foo'. Ensure all variables are assigned on all execution paths before they are read.",
+          "file": "examples/sample_bad.c",
+          "line": 10,
+          "severity": "critical",
+          "reference": "MISRA C:2012 Rule 9.1 (conceptually similar)"
+        },
+        {
+          "rule_id": "UNINIT_VAR_001",
+          "message": "Variable 'b' may be used uninitialized in function 'foo'. Ensure all variables are assigned on all execution paths before they are read.",
+          "file": "examples/sample_bad.c",
+          "line": 16,
+          "severity": "critical",
+          "reference": "MISRA C:2012 Rule 9.1 (conceptually similar)"
+        },
+        {
+          "rule_id": "UNINIT_VAR_001",
+          "message": "Variable 'a' may be used uninitialized in function 'foo'. Ensure all variables are assigned on all execution paths before they are read.",
+          "file": "examples/sample_bad.c",
+          "line": 16,
+          "severity": "critical",
+          "reference": "MISRA C:2012 Rule 9.1 (conceptually similar)"
+        },
+        {
+          "rule_id": "DEAD_STORE_001",
+          "message": "Value assigned to 'a' is never used (dead store) in function 'foo'. Remove redundant assignments or use the written value; dead stores may indicate logic bugs or leftover debug code.",
+          "file": "examples/sample_bad.c",
+          "line": 11,
+          "severity": "major",
+          "reference": "Code quality guideline \u00a74.3 Dead stores"
+        },
+        {
+          "rule_id": "DEAD_STORE_001",
+          "message": "Value assigned to 'b' is never used (dead store) in function 'foo'. Remove redundant assignments or use the written value; dead stores may indicate logic bugs or leftover debug code.",
+          "file": "examples/sample_bad.c",
+          "line": 12,
+          "severity": "major",
+          "reference": "Code quality guideline \u00a74.3 Dead stores"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_files": 1,
+    "total_violations": 9,
+    "by_severity": {
+      "major": 3,
+      "minor": 2,
+      "critical": 4
+    }
+  }
+}

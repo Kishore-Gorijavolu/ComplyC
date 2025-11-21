@@ -8,6 +8,7 @@ from .loader import load_rules
 from .parser import parse_c_file
 from .rule_engine import run_rules
 from .reporters import write_json_report, write_html_report
+from .cfg import build_cfg  # optional debug CFG view only
 
 
 def ensure_reports_dir() -> str:
@@ -73,7 +74,7 @@ def main():
     # Base mode from YAML
     preproc_mode = str(style.get("preprocessor", "builtin")).lower()
 
-    # Decide final use_gcc based on CLI override + YAML
+    # Determine preprocessor mode
     if args.use_gcc:
         use_gcc = True
     elif args.no_gcc:
@@ -90,8 +91,19 @@ def main():
 
     # ---------- Per-file analysis ----------
     for path in args.files:
-        # parse with or without GCC, depending on resolved mode
+
+        # --- Step 1: Parse AST ---
         ast = parse_c_file(path, use_gcc=use_gcc)
+
+        # --- Step 2 (optional): Build CFGs just for debug view ---
+        if not args.quiet:
+            cfgs = build_cfg(ast)
+            for func_name, cfg in cfgs.items():
+                print(f"\n[CFG] Function: {func_name}")
+                cfg.dump()
+                print(f"  Cyclomatic Complexity = {cfg.compute_cyclomatic_complexity()}\n")
+
+        # --- Step 3: Rule Checking (AST + Dataflow via YAML rules) ---
         violations = run_rules(ast, rules, path)
         per_file_violations[path] = violations
 
@@ -100,7 +112,7 @@ def main():
             sev = (v.severity or "unspecified").lower()
             severity_counter[sev] += 1
 
-        # Per-file console output (unless quiet)
+        # --- Step 4: Per-file console output ---
         if not args.quiet:
             print(f"\nFile: {path}")
             if not violations:
@@ -110,7 +122,7 @@ def main():
                     line = f"line {v.line}" if v.line is not None else "line ?"
                     print(f"  [{v.rule_id}] {line}: {v.message}")
 
-    # ---------- Summary (always printed) ----------
+    # ---------- Summary ----------
     print("\n==================== Summary ====================")
     print(f"Total files analyzed   : {len(per_file_violations)}")
     print(f"Total violations found : {total_violations}")
@@ -134,20 +146,14 @@ def main():
 
     ts = make_timestamp()
 
-    # Build a short identifier from the C filenames
+    # Build short filename tag
     file_basenames = [os.path.splitext(os.path.basename(f))[0] for f in args.files]
+    file_tag = file_basenames[0] if len(file_basenames) == 1 else "_And_".join(file_basenames)
 
-    # If there is only one file, use its name. If multiple, join with "_And_"
-    if len(file_basenames) == 1:
-        file_tag = file_basenames[0]
-    else:
-        file_tag = "_And_".join(file_basenames)
-
-    # Start from user-provided paths (if any)
+    # Use provided paths or auto-generate
     json_path = args.json_report
     html_path = args.html_report
 
-    # If user didn't specify any paths, generate timestamped defaults with file names
     if json_path is None and html_path is None:
         json_path = os.path.join(reports_dir, f"complyc_report_{file_tag}_{ts}.json")
         html_path = os.path.join(reports_dir, f"complyc_report_{file_tag}_{ts}.html")

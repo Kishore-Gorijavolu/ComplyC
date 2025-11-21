@@ -209,3 +209,29 @@ rules:
     severity: minor
     guidance: "Reduce argument count."
     reference: "Industry Practice"
+    
+  - id: UNINIT_VAR_001
+    title: "Variable must be initialized before use"
+    scope: file
+    check: dataflow_uninitialized
+    severity: critical
+    guidance: "Ensure all variables are assigned on all execution paths before they are read."
+    reference: "MISRA C:2012 Rule 9.1 (conceptually similar)"
+
+  - id: DEAD_STORE_001
+    title: "Dead store – value written but not used"
+    scope: file
+    check: dataflow_dead_store
+    severity: major
+    guidance: "Remove redundant assignments or use the written value; dead stores may indicate logic bugs or leftover debug code."
+    reference: "Code quality guideline §4.3 Dead stores"
+
+  - id: UNUSED_VAR_001
+    title: "Variable is written but never used"
+    scope: file
+    check: dataflow_unused_var
+    severity: minor
+    guidance: "Remove unused variables or use them meaningfully to avoid confusion and reduce maintenance risk."
+    reference: "Code quality guideline §4.2 Unused items"
+
+

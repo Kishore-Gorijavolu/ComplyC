@@ -10,6 +10,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pycparser import c_ast
 
+from .cfg import build_cfg
+from .dataflow import analyze_translation_unit
+
 
 @dataclass
 class Violation:
@@ -129,7 +132,7 @@ def get_node_name(node: Any) -> Optional[str]:
     return None
 
 
-# ---------- core checks ----------
+# ---------- core checks (existing) ----------
 
 def check_regex(node, rule, ctx) -> List[Violation]:
     name = get_node_name(node)
@@ -149,16 +152,15 @@ def check_regex(node, rule, ctx) -> List[Violation]:
         )]
     return []
 
+
 def check_global_naming(node, rule, ctx) -> List[Violation]:
     """
     Enforce naming rule for *global variables only*:
     - A global variable is a Decl whose parent is the FileAST
       and whose type is NOT a function (i.e., not a FuncDecl).
-    - Functions, parameters, and local variables are ignored.
     """
     from pycparser import c_ast  # local import just to be explicit
 
-    # We only expect this to be called with the FileAST because scope: file
     if not isinstance(node, c_ast.FileAST):
         return []
 
@@ -172,23 +174,16 @@ def check_global_naming(node, rule, ctx) -> List[Violation]:
 
     class GlobalVarVisitor(c_ast.NodeVisitor):
         def visit_Decl(self, decl: c_ast.Decl):
-            # Determine if this Decl is at top level (child of FileAST)
             parent = parent_map.get(decl)
 
             if isinstance(parent, c_ast.FileAST):
-                # Now distinguish between:
-                # - function declarations/prototypes (FuncDecl)
-                # - true variables (anything else)
                 decl_type = decl.type
-                # Unwrap nested types until we reach the base
                 while hasattr(decl_type, "type") and not isinstance(decl_type, c_ast.FuncDecl):
                     decl_type = decl_type.type
 
-                # If base is FuncDecl -> it's a function, not a variable
                 if isinstance(decl_type, c_ast.FuncDecl):
-                    return  # skip functions
+                    return
 
-                # This is a real global variable
                 name = decl.name
                 if name is None:
                     return
@@ -203,11 +198,11 @@ def check_global_naming(node, rule, ctx) -> List[Violation]:
                         reference=rule.get("reference"),
                     ))
 
-            # Continue walking (there might be more Decls)
             self.generic_visit(decl)
 
     GlobalVarVisitor().visit(node)
     return violations
+
 
 def check_max_function_length(node: c_ast.FuncDef, rule, ctx) -> List[Violation]:
     if not node.coord:
@@ -271,7 +266,6 @@ def check_forbidden_functions(node: c_ast.FuncCall, rule, ctx) -> List[Violation
 
 
 def check_file_header_contains(node, rule, ctx) -> List[Violation]:
-    # node is the FileAST
     file_lines = ctx["file_lines"]
     required = rule.get("required_lines", [])
     missing = [s for s in required if not any(s in line for line in file_lines[:20])]
@@ -380,6 +374,7 @@ def check_max_nesting_depth(node: c_ast.FuncDef, rule, ctx) -> List[Violation]:
 def _strip_int_suffixes(tok: str) -> str:
     return re.sub(r'[uUlL]+$', '', tok)
 
+
 def _parse_int_literal(tok: str) -> Optional[int]:
     s = _strip_int_suffixes(tok)
     try:
@@ -394,8 +389,10 @@ def _parse_int_literal(tok: str) -> Optional[int]:
     except ValueError:
         return None
 
+
 def _strip_float_suffixes(tok: str) -> str:
     return re.sub(r'[fFlL]$', '', tok)
+
 
 def _parse_float_literal(tok: str) -> Optional[float]:
     s = _strip_float_suffixes(tok)
@@ -404,6 +401,7 @@ def _parse_float_literal(tok: str) -> Optional[float]:
     except ValueError:
         return None
 
+
 def _is_under_enum(node, parent_map) -> bool:
     cur = node
     while cur in parent_map:
@@ -411,6 +409,7 @@ def _is_under_enum(node, parent_map) -> bool:
         if isinstance(cur, (c_ast.Enum, c_ast.Enumerator)):
             return True
     return False
+
 
 def _effective_numeric_value(node, parent_map) -> Tuple[Optional[float], str]:
     if not isinstance(node, c_ast.Constant):
@@ -429,6 +428,7 @@ def _effective_numeric_value(node, parent_map) -> Tuple[Optional[float], str]:
         fval = _parse_float_literal(raw)
         return ((sign * fval) if fval is not None else None, "float")
     return (None, "")
+
 
 def check_magic_number(node, rule, ctx) -> List[Violation]:
     parent_map = ctx.get("parent_map", {})
@@ -476,6 +476,96 @@ def check_magic_number(node, rule, ctx) -> List[Violation]:
     return violations
 
 
+# ---------- NEW: Dataflow-based checks ----------
+
+def check_dataflow_uninitialized(node, rule, ctx) -> List[Violation]:
+    """YAML: check: dataflow_uninitialized (scope: file)"""
+    if not isinstance(node, c_ast.FileAST):
+        return []
+    df_results = ctx.get("dataflow_results", {})
+    violations: List[Violation] = []
+    seen = set()  # (func_name, var, line)
+
+    for func_name, res in df_results.items():
+        for var, line in res.get("uninitialized_uses", []):
+            key = (func_name, var, line)
+            if key in seen:
+                continue
+            seen.add(key)
+            violations.append(Violation(
+                rule_id=rule["id"],
+                message=(
+                    f"Variable '{var}' may be used uninitialized in function '{func_name}'. "
+                    f"{rule.get('guidance', '')}"
+                ),
+                file=ctx["file_path"],
+                line=line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            ))
+    return violations
+
+
+def check_dataflow_dead_store(node, rule, ctx) -> List[Violation]:
+    """YAML: check: dataflow_dead_store (scope: file)"""
+    if not isinstance(node, c_ast.FileAST):
+        return []
+    df_results = ctx.get("dataflow_results", {})
+    violations: List[Violation] = []
+    seen = set()  # (func_name, var, line)
+
+    for func_name, res in df_results.items():
+        for var, line in res.get("dead_stores", []):
+            key = (func_name, var, line)
+            if key in seen:
+                continue
+            seen.add(key)
+            violations.append(Violation(
+                rule_id=rule["id"],
+                message=(
+                    f"Value assigned to '{var}' is never used (dead store) in function '{func_name}'. "
+                    f"{rule.get('guidance', '')}"
+                ),
+                file=ctx["file_path"],
+                line=line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            ))
+    return violations
+
+
+def check_dataflow_unused_var(node, rule, ctx) -> List[Violation]:
+    """YAML: check: dataflow_unused_var (scope: file)"""
+    if not isinstance(node, c_ast.FileAST):
+        return []
+    df_results = ctx.get("dataflow_results", {})
+    violations: List[Violation] = []
+    seen = set()  # (func_name, var)
+
+    for func_name, res in df_results.items():
+        for var in res.get("never_used", []):
+            key = (func_name, var)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            writes = res.get("writes", {}).get(var, [])
+            line = writes[0] if writes else None
+
+            violations.append(Violation(
+                rule_id=rule["id"],
+                message=(
+                    f"Variable '{var}' is written but never used in function '{func_name}'. "
+                    f"{rule.get('guidance', '')}"
+                ),
+                file=ctx["file_path"],
+                line=line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            ))
+    return violations
+
+
 # ---------- dispatcher ----------
 
 CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[Violation]]] = {
@@ -488,6 +578,10 @@ CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[V
     "max_nesting_depth": check_max_nesting_depth,
     "magic_number": check_magic_number,
     "global_naming": check_global_naming,
+    # NEW dataflow checks (YAML-controlled)
+    "dataflow_uninitialized": check_dataflow_uninitialized,
+    "dataflow_dead_store": check_dataflow_dead_store,
+    "dataflow_unused_var": check_dataflow_unused_var,
 }
 
 
@@ -499,10 +593,15 @@ def run_rules(ast: c_ast.FileAST, rules: List[Dict[str, Any]], file_path: str) -
 
     parent_map = build_parent_map(ast)
 
+    # Build CFGs + dataflow results ONCE per file
+    cfgs = build_cfg(ast)
+    dataflow_results = analyze_translation_unit(ast, cfgs)
+
     ctx_base = {
         "file_path": file_path,
         "file_lines": file_lines,
         "parent_map": parent_map,
+        "dataflow_results": dataflow_results,
     }
 
     all_violations: List[Violation] = []
