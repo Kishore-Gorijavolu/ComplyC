@@ -168,7 +168,7 @@ examples/
 
 ---
 
-# 💡 Why this project
+# Why this project
 
 This project started from a simple observation:
 
@@ -178,7 +178,7 @@ ComplyC is an attempt to bridge that gap in a practical, configurable way.
 
 ---
 
-# 🧭 Roadmap
+# Roadmap
 
 Planned improvements:
 
@@ -190,7 +190,7 @@ Planned improvements:
 
 ---
 
-# 🤝 Contributing
+# Contributing
 
 Contributions are welcome:
 
