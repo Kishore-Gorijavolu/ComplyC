@@ -204,7 +204,7 @@ Contributions are welcome:
 # 📬 Contact
 
 Kishore Gorijavolu
-LinkedIn: [https://www.linkedin.com/in/gokish03](https://www.linkedin.com/in/gokish03)
-GitHub: [https://github.com/Kishore-Gorijavolu](https://github.com/Kishore-Gorijavolu)
+* LinkedIn: [https://www.linkedin.com/in/gokish03](https://www.linkedin.com/in/gokish03)
+* GitHub: [https://github.com/Kishore-Gorijavolu](https://github.com/Kishore-Gorijavolu)
 
 ---
