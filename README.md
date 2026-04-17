@@ -1,234 +1,210 @@
-# ComplyC — A Configurable Coding Guideline Compliance Engine for Safety-Critical C Code
-### (Also a Rule-Based Static Analysis for Automotive & Embedded Systems)
+# ComplyC – Coding Guideline Compliance Engine for C
 
-ComplyC is a lightweight, configurable, standards-aware coding-guideline compliance engine designed for safety-critical embedded C projects.
+ComplyC is a lightweight tool that helps teams automatically check whether their C code follows internal coding guidelines.
 
-It transforms natural-language coding guidelines into **executable rules** and automatically analyzes `.c` and `.h` files for deviations.
+Instead of manually reviewing style, structure, and safety rules, ComplyC turns those guidelines into executable checks and generates clear reports of violations.
 
-Whether you're working with automotive inverters (HVPO, HVDC), bootloaders, microcontroller firmware, or ASPICE SWE.4–SWE.6 deliverables, ComplyC enforces **consistency, safety, and traceability** from Day 1.
-
----
-
-## 🚀 Key Features
-
-### 🔍 1. Rule-Based Coding Guideline Enforcement
-ComplyC parses your source code and validates it against your organization's coding-style guide, including:
-
-- Function & variable naming conventions  
-- Required module header templates  
-- Commenting & documentation rules (Doxygen, inline docs)  
-- Bracing & indentation style  
-- Global/static variable restrictions  
-- Forbidden constructs (recursion, dynamic memory, `goto`)  
-- Safety-critical checks:  
-  - magic numbers  
-  - unguarded array writes  
-  - unsafe hardware-register access  
-  - missing boundary checks  
-
-Rules are stored in **clean, editable YAML**, making it easy for teams to evolve their standards.
+It is designed for embedded and safety-critical development workflows where consistency, traceability, and audit readiness matter.
 
 ---
 
-##  2. Detailed Non-Compliance Reports
+# What problem this solves
 
-ComplyC generates clean, audit-ready compliance reports:
+In most teams:
 
-- Total violations  
-- Violations by severity (critical / major / minor)  
-- Rule ID, title, guidance, and standard reference  
-- File name, line number, highlighted snippet  
-- Recommended fix for each violation  
+* Coding guidelines exist as documents (PDF, Word, Confluence)
+* Enforcement depends on manual reviews
+* Violations slip through or are inconsistently applied
 
-**Supported output formats:**
+ComplyC closes that gap by:
 
-- **HTML** – ideal for JIRA uploads & design reviews  
-- **Markdown** – GitHub-friendly  
-- **JSON** – toolchain & CI/CD integration  
-- **CSV** – compliance metrics for ASPICE & ISO 26262 audits  
+> Converting coding rules into automated checks that run on real code.
 
 ---
 
-##  3. AST-Aware Static Analysis (via libclang)
+# What ComplyC does
 
-Built on Clang’s AST, enabling precise structural analysis far beyond regex-based linters:
+ComplyC scans `.c` and `.h` files and validates them against a configurable rule set.
 
-- Function declarations & definitions  
-- Control structures (`if`, `switch`, `for`, `while`)  
-- Typedefs, enums, macros  
-- File-level metadata  
-- Nested scopes, blocks, and variable lifetimes  
+It can detect things like:
 
-This ensures **accurate and deterministic rule enforcement** even in complex embedded projects.
+* Naming convention violations
+* Missing file headers or documentation blocks
+* Magic numbers in code
+* Forbidden functions or constructs
+* Function size, complexity, and structure issues
+* Basic dataflow issues (e.g., unused variables, dead stores)
 
----
+Example:
 
-##  4. Automotive & Safety Workflow Integration
+```c
+int a = 10;     // flagged as magic number
+return 42;      // flagged as magic number
+```
 
-ComplyC integrates naturally into:
-
-- ASPICE V-Model  
-- SWE.4 — Unit Development & Verification. (Also includes Static Analysis and Code reviews)  
-- SWE.5 — Integration Testing (Unit can be alled without Mocking using Fault Injection)  
-- SWE.6 — Qualification Testing (If requirements allocated to Non Functional, code review, or Documentation review as the Software test method)
-- ISO 26262 Part 6 safety software workflow  
-- CI/CD (GitLab, GitHub Actions, Azure DevOps)  
+These are not syntax errors—but they violate maintainability rules.
 
 ---
 
-##  5. Configurable YAML Rule Sets
+# ⚠️ What ComplyC is NOT
 
-Example rule:
+ComplyC is **not a MISRA static analysis tool**.
+
+* It does not aim to fully enforce MISRA C
+* It does not perform deep compiler-level semantic validation
+* It does not replace tools like Polyspace, Coverity, or PC-Lint
+
+Instead:
+
+> ComplyC focuses on enforcing **organization-specific coding standards**, which is a different layer of software quality.
+
+---
+
+# How it works
+
+At a high level:
+
+1. Load rules from a YAML file
+2. Parse C source into an AST
+3. Apply rules based on scope (file, function, variable, etc.)
+4. Generate structured reports
+
+The engine is modular:
+
+* Parser (pycparser + optional GCC preprocessing)
+* Rule engine (pluggable checks)
+* CFG + basic dataflow analysis
+* Report generators (HTML, JSON)
+
+---
+
+# Example rule (YAML)
 
 ```yaml
 - id: NAMING_001
-  title: "Function names must be in lower_snake_case"
+  title: "Function names must be lower_snake_case"
   scope: function
+  check: regex
   pattern: "^[a-z][a-z0-9_]*$"
   severity: major
-  guidance: "Rename function to comply with the naming standard."
-  reference: "Coding Guideline §3.2.1"
+  guidance: "Rename function to match naming convention"
 ```
-
-You can define:
-
-- Naming conventions  
-- Forbidden APIs  
-- Required documentation blocks  
-- Safety rules (bounds, range checks, MISRA-like constraints)  
-- Formatting rules  
 
 ---
 
-#  Installation
+# Output
 
-### Install Dependencies
+ComplyC generates clean reports that can be used for reviews or audits.
+
+Includes:
+
+* Total violations
+* Severity breakdown
+* File + line reference
+* Rule ID and description
+* Suggested fix guidance
+
+Formats:
+
+* HTML (review-friendly)
+* JSON (tool integration)
+* CSV (metrics / audits)
+
+---
+
+# Where this fits in the workflow
+
+ComplyC fits naturally into:
+
+* Code reviews (pre-check before PR)
+* CI/CD pipelines
+* ASPICE SWE.4 / SWE.5 activities
+* Internal compliance audits
+
+It helps answer:
+
+> “Is this code following our coding standard consistently?”
+
+---
+
+# Getting started
+
+Install dependencies:
+
 ```bash
 pip install clang pyyaml rich
 ```
 
-### Clone the Repository
+Run on a file:
+
 ```bash
-git clone https://github.com/<your-username>/ComplyC.git
-cd ComplyC
+python -m complyc.main --rules rules/complyc_style.yml src/file.c
 ```
 
----
+Generate report:
 
-#  Usage
-
-### Basic Run
 ```bash
-python -m complyc.main --rules rules/complyc_style.yml path/to/file.c
-```
-
-### Scan Entire Project
-```bash
-python -m complyc.main --rules rules/complyc_style.yml src/**/*.c
-```
-
-### Save an HTML Report
-```bash
-python -m complyc.main --rules rules/complyc_style.yml src/*.c --report out/report.html
+python -m complyc.main --rules rules/complyc_style.yml src/*.c --html-report report.html
 ```
 
 ---
 
-#  Directory Structure
+# 📁 Project structure
 
 ```
-ComplyC/
-│
-├── complyc/
-│   ├── parser.py             # libclang AST parser
-│   ├── rule_engine.py        # Rule evaluation engine
-│   ├── report_generator.py   # HTML/MD/JSON/CSV reports
-│   ├── scanner.py            # Orchestrates the rule-checking workflow
-│   └── utils.py              # Helper utilities
-│
-├── rules/
-│   └── example_style.yml     # Sample rule set
-│
-├── examples/
-│   └── sample_code.c         # Demo input file
-│
-└── README.md
+complyc/
+  parser.py
+  rule_engine.py
+  cfg.py
+  dataflow.py
+  reporters.py
+
+rules/
+  complyc_style.yml
+
+examples/
+  sample_code.c
 ```
 
 ---
 
-#  Sample Report Output
+# 💡 Why this project
 
-### Summary
+This project started from a simple observation:
 
-| Severity | Count |
-|---------|-------|
-| Critical | 1 |
-| Major | 6 |
-| Minor | 12 |
+> Teams spend a lot of time writing coding guidelines—but very little time enforcing them consistently.
+
+ComplyC is an attempt to bridge that gap in a practical, configurable way.
 
 ---
 
-### Example Violation
+# 🧭 Roadmap
 
-```
-File: src/mod_nvm.c
-Line: 87
-Rule: NAMING_001 – Function names must be in lower_snake_case
-Message: Function 'RomCalcCrc16' does not match required naming convention.
-Guideline: Coding Guideline §3.2.1
-Suggested Fix: Rename to 'rom_calc_crc16'
-```
+Planned improvements:
 
----
-
-#  Use Cases
-
-- Automotive embedded C (inverters, BMS, ADAS, chargers)  
-- Aerospace firmware verification  
-- Industrial controllers & power electronics  
-- Medical device firmware compliance  
-- Bootloaders & memory-management modules  
-- Any organization with a formal coding standard  
+* More rule templates (automotive / embedded)
+* Better reporting UI
+* Clang-based parsing option
+* Deeper dataflow checks
+* CI/CD integrations
 
 ---
 
-#  Why This Project Matters
+# 🤝 Contributing
 
-ComplyC demonstrates:
+Contributions are welcome:
 
-- **Original technical contribution** to safety-critical software engineering  
-- **Improved reliability** in embedded systems  
-- **Innovation**: converting natural-language rules → executable validation  
-- **Industry adoption potential** across automotive, aerospace, medical, industrial  
-- **Leadership** in automated static-compliance tooling  
-
-
----
-
-#  Contributing
-
-Contributions are welcome!  
-You may add:
-
-- New rule templates  
-- Extended AST parsers  
-- Additional reporting formats  
-- Multi-language support  
-
-Submit a PR anytime.
-
----
-
-#  License
-
-Released under the **MIT License**.  
-Free for commercial and academic use.
+* Add new rules
+* Improve analysis checks
+* Enhance reporting
+* Extend parser support
 
 ---
 
 # 📬 Contact
 
-**Email:** kishore.gorijavolu@gmail.com  
-**LinkedIn:** https://www.linkedin.com/in/gokish03  
-**GitHub:** https://github.com/kishore-gorijavolu  
+Kishore Gorijavolu
+LinkedIn: [https://www.linkedin.com/in/gokish03](https://www.linkedin.com/in/gokish03)
+GitHub: [https://github.com/Kishore-Gorijavolu](https://github.com/Kishore-Gorijavolu)
+
+---
