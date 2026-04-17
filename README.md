@@ -1,5 +1,5 @@
 # ComplyC — A Configurable Coding Guideline Compliance Engine for Safety-Critical C Code
-### Rule-Based Static Analysis for Automotive & Embedded Systems
+### (Also a Rule-Based Static Analysis for Automotive & Embedded Systems)
 
 ComplyC is a lightweight, configurable, standards-aware coding-guideline compliance engine designed for safety-critical embedded C projects.
 
@@ -68,9 +68,9 @@ This ensures **accurate and deterministic rule enforcement** even in complex emb
 ComplyC integrates naturally into:
 
 - ASPICE V-Model  
-- SWE.4 — Unit Design & Implementation  
-- SWE.5 — Unit Verification  
-- SWE.6 — Integration & Testing  
+- SWE.4 — Unit Development & Verification. (Also includes Static Analysis and Code reviews)  
+- SWE.5 — Integration Testing (Unit can be alled without Mocking using Fault Injection)  
+- SWE.6 — Qualification Testing (If requirements allocated to Non Functional, code review, or Documentation review as the Software test method)
 - ISO 26262 Part 6 safety software workflow  
 - CI/CD (GitLab, GitHub Actions, Azure DevOps)  
 
