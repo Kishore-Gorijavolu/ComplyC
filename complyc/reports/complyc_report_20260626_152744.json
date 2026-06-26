@@ -1,0 +1,265 @@
+{
+  "files": [
+    {
+      "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+      "violations": [
+        {
+          "rule_id": "NAMING_FUNC_001",
+          "message": "Name 'Tsk_button' does not match pattern '^[a-z][a-z0-9_]*$'. Rename function to lower_snake_case (e.g. rom_calc_crc16).",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 682,
+          "severity": "major",
+          "reference": "\u00a73.2.1 Function Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'GG_LIN_and_button_sleep_flag' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 106,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_tsk' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 256,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_tsk_msk' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 259,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_tsk_ind' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 260,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_tsk_ena' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 261,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_tsk_tmr' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 262,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_ms_tmr' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 264,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'COS_sec_tmr' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 265,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'const_LIN_FRAME_CTRL_INIT' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 527,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'const_LIN_FRAME_CTRL_MSG_IDS' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 533,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'l_flags_SockAC1e_01' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 552,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'l_flags_SockAC1s_01' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 575,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'l_LinData' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 601,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'const_LinData' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 603,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_GLOBAL_001",
+          "message": "Global variable 'button_not_changed_counter' does not match pattern '^g_[a-z0-9_]+$'. Prefix global variable names with g_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 674,
+          "severity": "major",
+          "reference": "\u00a73.2.2 Global Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_STATIC_001",
+          "message": "Name 'button_not_changed_counter' does not match pattern '^s_[a-z0-9_]+$'. Prefix file-local static variables with s_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 674,
+          "severity": "minor",
+          "reference": "\u00a73.2.3 Static Variable Naming"
+        },
+        {
+          "rule_id": "NAMING_STATIC_001",
+          "message": "Name 'btn_last' does not match pattern '^s_[a-z0-9_]+$'. Prefix file-local static variables with s_.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 712,
+          "severity": "minor",
+          "reference": "\u00a73.2.3 Static Variable Naming"
+        },
+        {
+          "rule_id": "FILE_HEADER_001",
+          "message": "File is missing header entries: Module Name:, Description:, Author:, Version:. Use standard file header.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 1,
+          "severity": "major",
+          "reference": "\u00a72.1 File Header Template"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '3' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 333,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '3' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 343,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '8' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 374,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 527,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 533,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 537,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '7' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 546,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '8' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 547,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '8' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 570,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '8' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 583,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '16' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 593,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        },
+        {
+          "rule_id": "MAGIC_NUMBER_001",
+          "message": "Magic number '2' detected. Replace literals with constants.",
+          "file": "C:/GIT/vw-hvpo/VWDevBoardWorkspace/VW_HVPO/src/button.c",
+          "line": 599,
+          "severity": "minor",
+          "reference": "\u00a78.1 Magic Numbers"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_files": 1,
+    "total_violations": 31,
+    "by_severity": {
+      "major": 17,
+      "minor": 14
+    }
+  }
+}
