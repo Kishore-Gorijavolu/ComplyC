@@ -87,14 +87,14 @@ rules:
     guidance: "Document public API functions."
     reference: "§4.1 Function Documentation"
 
-  - id: MAGIC_NUMBER_001
-    title: "Magic numbers must be replaced with named constants"
-    scope: literal
-    check: magic_number
-    ignore_values: [0, 1, -1]
-    severity: minor
-    guidance: "Replace literals with constants."
-    reference: "§8.1 Magic Numbers"
+  # - id: MAGIC_NUMBER_001
+  #   title: "Magic numbers must be replaced with named constants"
+  #   scope: literal
+  #   check: magic_number
+  #   ignore_values: [0, 1, -1]
+  #   severity: minor
+  #   guidance: "Replace literals with constants."
+  #   reference: "§8.1 Magic Numbers"
 
   - id: FIXEDPOINT_COMMENT_001
     title: "Binary point changes must be documented"

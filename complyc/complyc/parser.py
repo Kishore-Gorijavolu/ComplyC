@@ -182,11 +182,25 @@ def preprocess_with_gcc(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=30,
         )
     except FileNotFoundError:
         raise RuntimeError(
             "gcc.exe was not found. Install MinGW-w64 or add gcc.exe to PATH."
         )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            "GCC preprocessing timed out after 30 seconds.\n\n"
+            "This usually means GCC is stuck processing project includes, recursive macros, "
+            "or a very large generated header.\n\n"
+            "Try:\n"
+            "1. Remove unnecessary include folders.\n"
+            "2. Disable auto-detected include folders and add only required paths.\n"
+            "3. Add missing compiler defines.\n"
+            "4. Run Built-in Demo mode for lightweight scans.\n\n"
+            "Command:\n"
+            + " ".join(cmd)
+        ) from e
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
             "GCC preprocessing failed.\n\n"
