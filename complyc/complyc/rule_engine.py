@@ -5,6 +5,8 @@ rule_engine.py – Core engine for ComplyC
 from __future__ import annotations
 
 import re
+from .parser import get_mapped_source_location
+from .source_index_engine import get_source_index, SourceLocation
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -129,6 +131,96 @@ def get_node_name(node: Any) -> Optional[str]:
     return None
 
 
+def _source_index(ctx):
+    return ctx.get("source_index") or get_source_index(ctx["file_path"])
+
+
+def _raw_coord_line(node: Any) -> Optional[int]:
+    coord = getattr(node, "coord", None)
+    return getattr(coord, "line", None)
+
+
+def resolve_declaration_location_strict(node: Any, ctx, symbol_name: Optional[str] = None) -> Optional[Tuple[str, int]]:
+    """
+    Resolve a declaration only if that declaration exists in the original file
+    being scanned.
+
+    This is intentionally stricter than resolve_report_location(). It prevents
+    global/static naming rules from reporting declarations that entered the AST
+    only through GCC preprocessing or included headers while scanning a .c file.
+    Those declarations should be reported when their own .h/.c file is scanned,
+    not when a different translation unit includes them.
+    """
+    name = symbol_name or getattr(node, "name", None)
+    if not name:
+        return None
+
+    graph = _source_index(ctx)
+    loc = graph.find_declaration(name, _raw_coord_line(node))
+    if not loc:
+        return None
+
+    return loc.file, loc.line
+
+
+def is_current_source_declaration(node: Any, ctx, symbol_name: Optional[str] = None) -> bool:
+    return resolve_declaration_location_strict(node, ctx, symbol_name) is not None
+
+
+def resolve_report_location(node: Any, ctx, symbol_name: Optional[str] = None) -> Tuple[str, Optional[int]]:
+    """
+    Permanent user-facing location resolver.
+
+    Priority:
+      1. Original-source call graph/index by function/declaration name.
+      2. GCC #line source mapping.
+      3. Raw pycparser coordinate as last fallback.
+
+    This prevents reports from showing preprocessed/header-expanded line numbers.
+    """
+    graph = _source_index(ctx)
+
+    if isinstance(node, c_ast.FuncDef):
+        loc = graph.find_function(getattr(node.decl, "name", None))
+        if loc:
+            return loc.file, loc.line
+
+    if isinstance(node, c_ast.Decl):
+        loc = graph.find_declaration(symbol_name or getattr(node, "name", None), _raw_coord_line(node))
+        if loc:
+            return loc.file, loc.line
+
+    if symbol_name:
+        loc = graph.find_function(symbol_name) or graph.find_declaration(symbol_name, _raw_coord_line(node))
+        if loc:
+            return loc.file, loc.line
+
+    coord = getattr(node, "coord", None)
+    analyzed_line = getattr(coord, "line", None)
+    if analyzed_line is not None:
+        mapped = get_mapped_source_location(ctx["file_path"], analyzed_line)
+        if mapped:
+            return mapped[0], mapped[1]
+
+    return ctx["file_path"], analyzed_line
+
+
+def resolve_numeric_literal_location(cn: c_ast.Constant, ctx) -> Optional[Tuple[str, int]]:
+    """
+    Find a numeric literal in the ORIGINAL source text.
+
+    If GCC expanded a macro, e.g. MAX_SPEED -> 100, then 100 will exist in the
+    preprocessed AST but not as a raw literal at the original usage site. In that
+    case this returns None, and the magic-number rule suppresses the violation.
+    """
+    graph = _source_index(ctx)
+    loc = graph.next_numeric_literal(str(getattr(cn, "value", "")))
+    if loc:
+        return loc.file, loc.line
+
+    return None
+
+
 # ---------- core checks ----------
 
 def check_regex(node, rule, ctx) -> List[Violation]:
@@ -139,11 +231,19 @@ def check_regex(node, rule, ctx) -> List[Violation]:
     if not pattern:
         return []
     if not re.match(pattern, name):
+        if isinstance(node, c_ast.Decl):
+            decl_loc = resolve_declaration_location_strict(node, ctx, name)
+            if decl_loc is None:
+                return []
+            report_file, report_line = decl_loc
+        else:
+            report_file, report_line = resolve_report_location(node, ctx, name)
+
         return [Violation(
             rule_id=rule["id"],
             message=f"Name '{name}' does not match pattern '{pattern}'. {rule.get('guidance', '')}",
-            file=ctx["file_path"],
-            line=getattr(node.coord, "line", None),
+            file=report_file,
+            line=report_line,
             severity=rule.get("severity"),
             reference=rule.get("reference"),
         )]
@@ -194,11 +294,15 @@ def check_global_naming(node, rule, ctx) -> List[Violation]:
                     return
 
                 if not regex.match(name):
+                    decl_loc = resolve_declaration_location_strict(decl, ctx, name)
+                    if decl_loc is None:
+                        return
+                    report_file, report_line = decl_loc
                     violations.append(Violation(
                         rule_id=rule["id"],
                         message=f"Global variable '{name}' does not match pattern '{pattern}'. {rule.get('guidance','')}",
-                        file=ctx["file_path"],
-                        line=getattr(decl.coord, "line", None),
+                        file=report_file,
+                        line=report_line,
                         severity=rule.get("severity"),
                         reference=rule.get("reference"),
                     ))
@@ -224,8 +328,8 @@ def check_max_function_length(node: c_ast.FuncDef, rule, ctx) -> List[Violation]
         return [Violation(
             rule_id=rule["id"],
             message=f"Function '{node.decl.name}' has {length} lines (max {max_lines}). {rule.get('guidance', '')}",
-            file=ctx["file_path"],
-            line=start,
+            file=resolve_report_location(node, ctx)[0],
+            line=resolve_report_location(node, ctx)[1],
             severity=rule.get("severity"),
             reference=rule.get("reference"),
         )]
@@ -245,8 +349,8 @@ def check_max_parameter_count(node: c_ast.FuncDef, rule, ctx) -> List[Violation]
             return [Violation(
                 rule_id=rule["id"],
                 message=f"Function '{node.decl.name}' has {count} parameters (max {max_params}). {rule.get('guidance', '')}",
-                file=ctx["file_path"],
-                line=node.coord.line if node.coord else None,
+                file=resolve_report_location(node, ctx, node.decl.name)[0],
+                line=resolve_report_location(node, ctx, node.decl.name)[1],
                 severity=rule.get("severity"),
                 reference=rule.get("reference"),
             )]
@@ -262,8 +366,8 @@ def check_forbidden_functions(node: c_ast.FuncCall, rule, ctx) -> List[Violation
         return [Violation(
             rule_id=rule["id"],
             message=f"Call to forbidden function '{func_name}'. {rule.get('guidance', '')}",
-            file=ctx["file_path"],
-            line=node.coord.line if node.coord else None,
+            file=resolve_report_location(node, ctx)[0],
+            line=resolve_report_location(node, ctx)[1],
             severity=rule.get("severity"),
             reference=rule.get("reference"),
         )]
@@ -319,8 +423,8 @@ def check_max_cyclomatic_complexity(node: c_ast.FuncDef, rule, ctx) -> List[Viol
         return [Violation(
             rule_id=rule["id"],
             message=f"Function '{node.decl.name}' has CC={v.cc} (max {max_cc}). {rule.get('guidance', '')}",
-            file=ctx["file_path"],
-            line=node.coord.line if node.coord else None,
+            file=resolve_report_location(node, ctx, node.decl.name)[0],
+            line=resolve_report_location(node, ctx, node.decl.name)[1],
             severity=rule.get("severity"),
             reference=rule.get("reference"),
         )]
@@ -367,8 +471,8 @@ def check_max_nesting_depth(node: c_ast.FuncDef, rule, ctx) -> List[Violation]:
         return [Violation(
             rule_id=rule["id"],
             message=f"Function '{node.decl.name}' nesting depth={v.max_depth} (max {max_depth}). {rule.get('guidance', '')}",
-            file=ctx["file_path"],
-            line=node.coord.line if node.coord else None,
+            file=resolve_report_location(node, ctx, node.decl.name)[0],
+            line=resolve_report_location(node, ctx, node.decl.name)[1],
             severity=rule.get("severity"),
             reference=rule.get("reference"),
         )]
@@ -430,6 +534,9 @@ def _effective_numeric_value(node, parent_map) -> Tuple[Optional[float], str]:
         return ((sign * fval) if fval is not None else None, "float")
     return (None, "")
 
+def _numeric_literal_appears_in_original_source(cn, ctx) -> bool:
+    return resolve_numeric_literal_location(cn, ctx) is not None
+
 def check_magic_number(node, rule, ctx) -> List[Violation]:
     parent_map = ctx.get("parent_map", {})
     allow_in_enum = rule.get("allow_in_enum", True)
@@ -456,11 +563,17 @@ def check_magic_number(node, rule, ctx) -> List[Violation]:
             return
         if allow_in_enum and _is_under_enum(cn, parent_map):
             return
+        literal_loc = resolve_numeric_literal_location(cn, ctx)
+        if rule.get("suppress_macro_expanded_constants", True) and literal_loc is None:
+            return
+
+        report_file, report_line = literal_loc if literal_loc else resolve_report_location(cn, ctx)
+
         violations.append(Violation(
             rule_id=rule["id"],
             message=f"Magic number {cn.value!r} detected. {rule.get('guidance','Define a named constant.')}",
-            file=ctx["file_path"],
-            line=getattr(cn.coord, "line", None),
+            file=report_file,
+            line=report_line,
             severity=rule.get("severity"),
             reference=rule.get("reference"),
         ))
@@ -498,11 +611,14 @@ def run_rules(ast: c_ast.FileAST, rules: List[Dict[str, Any]], file_path: str) -
         file_lines = f.readlines()
 
     parent_map = build_parent_map(ast)
+    #source_index = get_source_index(file_path)
+    source_index = None #--> Used for Debug only
 
     ctx_base = {
         "file_path": file_path,
         "file_lines": file_lines,
         "parent_map": parent_map,
+        "source_index": source_index,
     }
 
     all_violations: List[Violation] = []

@@ -9,6 +9,8 @@ import json
 import subprocess
 import sys
 import threading
+import queue
+import tempfile
 import traceback
 import webbrowser
 from collections import Counter
@@ -27,7 +29,7 @@ from complyc.reporters import write_json_report, write_html_report, violations_t
 
 
 APP_TITLE = "ComplyC GUI"
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.2.2"
 
 
 def app_base_dir() -> Path:
@@ -60,6 +62,13 @@ class ComplyCGui(tk.Tk):
         self.last_json_report: Path | None = None
         self.last_html_report: Path | None = None
         self.last_error_report: Path | None = None
+        self._scan_running = False
+        self._ui_queue: queue.Queue = queue.Queue()
+        self._scan_process = None
+        self._scan_result_path: Path | None = None
+        self._scan_config_path: Path | None = None
+        self._scan_timeout_ms = 120000
+        self._scan_poll_count = 0
 
         self.project_root_var = tk.StringVar(value="")
         self.rules_path_var = tk.StringVar(value=str(default_rules_path()) if default_rules_path().exists() else "")
@@ -346,10 +355,16 @@ class ComplyCGui(tk.Tk):
             listbox.insert(tk.END, value)
 
     def run_scan_threaded(self) -> None:
-        thread = threading.Thread(target=self.run_scan, daemon=True)
-        thread.start()
+        """Start scan in an external Python worker process.
 
-    def run_scan(self) -> None:
+        This is intentionally process-based instead of thread-based. A slow GCC
+        preprocessor, pycparser path, regex, or rule traversal cannot block the
+        Tkinter UI process.
+        """
+        if self._scan_running:
+            messagebox.showinfo(APP_TITLE, "A scan is already running. Please wait for it to finish.")
+            return
+
         rules_path = self.rules_path_var.get().strip()
         if not rules_path or not os.path.isfile(rules_path):
             self._show_error("Rules file is missing or invalid.")
@@ -358,75 +373,142 @@ class ComplyCGui(tk.Tk):
             self._show_error("Please select a project or add at least one .c file.")
             return
 
+        report_dir = default_reports_dir()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        config = {
+            "rules_path": rules_path,
+            "selected_files": list(self.selected_files),
+            "include_dirs": list(self.include_dirs),
+            "defines": list(self.defines),
+            "use_gcc": self.preprocessor_var.get() == "gcc",
+            "report_dir": str(report_dir),
+            "timestamp": timestamp,
+        }
+
+        fd_cfg, cfg_name = tempfile.mkstemp(prefix="complyc_scan_config_", suffix=".json")
+        os.close(fd_cfg)
+        fd_res, res_name = tempfile.mkstemp(prefix="complyc_scan_result_", suffix=".json")
+        os.close(fd_res)
+        self._scan_config_path = Path(cfg_name)
+        self._scan_result_path = Path(res_name)
+
+        with open(self._scan_config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "complyc.scan_worker",
+            "--config",
+            str(self._scan_config_path),
+            "--result",
+            str(self._scan_result_path),
+        ]
+
+        self._scan_running = True
+        self._scan_poll_count = 0
         self._set_busy(True)
+        self.status_var.set("Scan running in external worker...")
+        self.summary_var.set("Scan running...")
+        self._clear_tree()
+
         try:
-            self.status_var.set("Running scan...")
-            self._clear_tree()
+            self._scan_process = subprocess.Popen(
+                cmd,
+                cwd=str(app_base_dir()),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0,
+            )
+        except Exception as exc:
+            self._scan_running = False
+            self._set_busy(False)
+            PLACEHOLDER
+            return
 
-            _style, rules = load_rules(rules_path)
-            use_gcc = self.preprocessor_var.get() == "gcc"
+        self.after(500, self._poll_scan_process)
 
-            per_file_violations: Dict[str, List[Violation]] = {}
-            failed_files: List[dict] = []
-            severity_counter: Counter[str] = Counter()
+    def _poll_scan_process(self) -> None:
+        if not self._scan_running or self._scan_process is None:
+            return
 
-            total_files = len(self.selected_files)
-            for index, file_path in enumerate(self.selected_files, start=1):
-                self.status_var.set(f"Scanning {index}/{total_files}: {os.path.basename(file_path)}")
+        self._scan_poll_count += 1
+        elapsed_sec = self._scan_poll_count // 2
+        self.status_var.set(f"Scan running in external worker... {elapsed_sec}s")
+
+        rc = self._scan_process.poll()
+        if rc is None:
+            if self._scan_poll_count * 500 >= self._scan_timeout_ms:
                 try:
-                    ast = parse_c_file(
-                        file_path,
-                        use_gcc=use_gcc,
-                        include_dirs=self.include_dirs if use_gcc else [],
-                        defines=self.defines if use_gcc else [],
-                    )
-                    violations = run_rules(ast, rules, file_path)
-                    per_file_violations[file_path] = violations
-                    for v in violations:
-                        severity_counter[(v.severity or "unspecified").lower()] += 1
-                except Exception as file_exc:
-                    tb = traceback.format_exc()
-                    failed_files.append({
-                        "file": file_path,
-                        "error_type": type(file_exc).__name__,
-                        "error": str(file_exc),
-                        "traceback": tb,
-                    })
-                    print(f"[ComplyC] Skipping failed file: {file_path}")
-                    print(tb)
-                    continue
+                    self._scan_process.kill()
+                except Exception:
+                    pass
+                self._scan_running = False
+                self._set_busy(False)
+                self._show_error(
+                    "Scan worker timed out. The GUI was protected from freezing.\n\n"
+                    "Try reducing include folders, switching to Built-in Demo mode, "
+                    "or scanning fewer files."
+                )
+                return
+            self.after(500, self._poll_scan_process)
+            return
 
-            report_dir = default_reports_dir()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.last_json_report = report_dir / f"complyc_report_{timestamp}.json"
-            self.last_html_report = report_dir / f"complyc_report_{timestamp}.html"
-            self.last_error_report = report_dir / f"complyc_scan_errors_{timestamp}.html"
+        stdout, stderr = self._scan_process.communicate()
+        self._complete_scan_process(rc, stdout, stderr)
 
-            write_json_report(per_file_violations, str(self.last_json_report))
-            write_html_report(per_file_violations, str(self.last_html_report))
-            self._write_error_reports(failed_files, report_dir, timestamp)
+    def _complete_scan_process(self, return_code: int, stdout: str, stderr: str) -> None:
+        try:
+            result = None
+            if self._scan_result_path and self._scan_result_path.exists():
+                with open(self._scan_result_path, "r", encoding="utf-8") as f:
+                    result = json.load(f)
 
-            data = violations_to_dict(per_file_violations)
-            self._populate_results(data, failed_files)
+            if not result:
+                raise RuntimeError(
+                    "Scan worker exited without a result file.\n\n"
+                    f"Return code: {return_code}\n\nSTDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+                )
 
-            scanned_ok = len(per_file_violations)
-            failed = len(failed_files)
+            if not result.get("ok"):
+                raise RuntimeError(
+                    f"{result.get('error_type', 'WorkerError')}: {result.get('error', '')}\n\n"
+                    f"{result.get('traceback', '')}"
+                )
+
+            self.last_json_report = Path(result["json_report"])
+            self.last_html_report = Path(result["html_report"])
+            self.last_error_report = Path(result["error_report"])
+
+            self._populate_results(result["data"], result.get("failed_files", []))
+
+            scanned_ok = result["data"]["summary"]["total_files"]
+            failed = len(result.get("failed_files", []))
             self.status_var.set(
-                f"Scan completed. Successful: {scanned_ok}, Failed/skipped: {failed}. Reports written to: {report_dir}"
+                f"Scan completed. Successful: {scanned_ok}, Failed/skipped: {failed}. "
+                f"Reports written to: {result['report_dir']}"
             )
 
             if failed:
-                self.after(0, lambda: messagebox.showwarning(
+                messagebox.showwarning(
                     APP_TITLE,
                     f"Scan completed with {failed} failed/skipped file(s).\n\n"
                     f"Compliance reports were generated for the {scanned_ok} file(s) that parsed successfully.\n"
                     f"Open the Error Report for details."
-                ))
+                )
+
         except Exception as exc:
             traceback.print_exc()
-            self._show_error(f"Scan setup failed:\n{exc}")
+            self._show_error(f"Scan failed:\n{exc}")
         finally:
+            self._scan_running = False
+            self._scan_process = None
             self._set_busy(False)
+
+    def run_scan(self) -> None:
+        """Backward-compatible entry point for any old caller."""
+        self.run_scan_threaded()
 
     def _populate_results(self, data: dict, failed_files: List[dict] | None = None) -> None:
         failed_files = failed_files or []
@@ -521,7 +603,10 @@ pre { white-space: pre-wrap; background: #f8f8f8; border: 1px solid #ddd; paddin
     
     def _set_busy(self, busy: bool) -> None:
         def apply():
-            self.run_button.configure(state=tk.DISABLED if busy else tk.NORMAL)
+            self.run_button.configure(
+                state=tk.DISABLED if busy else tk.NORMAL,
+                text="Scanning..." if busy else "Run Scan",
+            )
             self.config(cursor="watch" if busy else "")
         self.after(0, apply)
 
