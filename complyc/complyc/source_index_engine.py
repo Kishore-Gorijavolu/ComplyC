@@ -1,30 +1,33 @@
 """
-source_index_engine.py - Original Source Index Engine for ComplyC.
+source_index_engine.py - Stable Original Source Index Engine for ComplyC.
 
-Purpose
--------
-pycparser coordinates can drift when GCC preprocessing expands headers, macros,
-or fake typedefs. This engine indexes the ORIGINAL source file and provides stable
-user-facing locations for rules and reports.
+Source Index Engine (SIE) v0.2.4
+---------------------------------
+The rule engine should not trust pycparser/GCC preprocessed coordinates for
+user-facing report locations. This module indexes the ORIGINAL source file once
+and exposes fast, deterministic lookups for symbols and literals.
 
-Use this module as the authority for report locations:
-    - function definitions
-    - global/static/local declarations
-    - numeric literals from original code only
-    - function calls / lightweight call graph
-    - includes and macros
+Design rules:
+    1. Index a file once; never rescan inside find_* methods.
+    2. Keep lookups deterministic and side-effect free.
+    3. Use line-oriented parsing only; avoid large DOTALL regex patterns.
+    4. Fail safe. If a construct is too complex, skip it and allow rule_engine
+       to fall back to GCC line mapping / raw pycparser coordinates.
 
-This is intentionally lightweight and dependency-free. It is not a full C parser;
-it is a robust source indexer used to correct/report locations after AST analysis.
+This is intentionally a lightweight source indexer, not a full C parser.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import json
 import os
 import re
+from bisect import bisect_left
 from typing import Dict, Iterable, List, Optional, Tuple
+
+SIE_VERSION = "0.2.4"
 
 
 # ============================================================
@@ -58,12 +61,17 @@ class DeclarationSymbol:
     def is_static(self) -> bool:
         return "static" in self.storage
 
+    @property
+    def is_global_scope(self) -> bool:
+        return self.scope in ("global", "static_global")
+
 
 @dataclass
 class MacroSymbol:
     name: str
     location: SourceLocation
     body: str = ""
+    function_like: bool = False
 
 
 @dataclass
@@ -83,19 +91,33 @@ class NumericLiteral:
 @dataclass
 class SourceIndex:
     file_path: str
+    line_count: int = 0
     functions: Dict[str, FunctionSymbol] = field(default_factory=dict)
     declarations: Dict[str, List[DeclarationSymbol]] = field(default_factory=dict)
     macros: Dict[str, MacroSymbol] = field(default_factory=dict)
     includes: List[IncludeSymbol] = field(default_factory=list)
     numeric_literals: List[NumericLiteral] = field(default_factory=list)
 
-    _literal_cursor: int = 0
+    # Built after numeric indexing. canonical token -> list of literals in source order.
+    _literal_by_canonical: Dict[str, List[NumericLiteral]] = field(default_factory=dict, repr=False)
+    _decl_names: set = field(default_factory=set, repr=False)
+
+    def finalize(self) -> None:
+        self._literal_by_canonical.clear()
+        for lit in self.numeric_literals:
+            self._literal_by_canonical.setdefault(lit.canonical, []).append(lit)
+        self._decl_names = set(self.declarations.keys())
+
+    # ---- frozen public API for rule_engine.py ----
 
     def find_function(self, name: Optional[str]) -> Optional[SourceLocation]:
         if not name:
             return None
         item = self.functions.get(name)
         return item.location if item else None
+
+    def find_function_symbol(self, name: Optional[str]) -> Optional[FunctionSymbol]:
+        return self.functions.get(name) if name else None
 
     def find_declaration(
         self,
@@ -121,19 +143,28 @@ class SourceIndex:
     ) -> Optional[DeclarationSymbol]:
         if not name:
             return None
-        items = list(self.declarations.get(name) or [])
+        items = self.declarations.get(name) or []
         if static_only is not None:
             items = [d for d in items if d.is_static == static_only]
         if global_only:
-            items = [d for d in items if d.scope in ("global", "static_global")]
+            items = [d for d in items if d.is_global_scope]
         if not items:
             return None
         if preferred_line is None:
             return items[0]
         return min(items, key=lambda d: abs(d.location.line - int(preferred_line)))
 
+    def find_static_declaration(self, name: Optional[str], preferred_line: Optional[int] = None) -> Optional[SourceLocation]:
+        return self.find_declaration(name, preferred_line=preferred_line, static_only=True)
+
+    def find_global_declaration(self, name: Optional[str], preferred_line: Optional[int] = None) -> Optional[SourceLocation]:
+        return self.find_declaration(name, preferred_line=preferred_line, global_only=True)
+
     def has_original_declaration(self, name: Optional[str]) -> bool:
-        return bool(name and self.declarations.get(name))
+        return bool(name and name in self._decl_names)
+
+    def has_macro(self, name: Optional[str]) -> bool:
+        return bool(name and name in self.macros)
 
     def find_macro(self, name: Optional[str]) -> Optional[SourceLocation]:
         if not name:
@@ -141,36 +172,92 @@ class SourceIndex:
         item = self.macros.get(name)
         return item.location if item else None
 
-    def next_numeric_literal(self, raw_token: str) -> Optional[SourceLocation]:
+    def find_numeric_literal(self, raw_token: str, preferred_line: Optional[int] = None) -> Optional[SourceLocation]:
         """
-        Return the next matching numeric literal from original source text.
+        Deterministic literal lookup.
 
-        This intentionally avoids macro-expanded numbers. Example:
-            #define MAX_SPEED 100
-            if (speed > MAX_SPEED)
+        If preferred_line is supplied, only exact same-line matches are returned.
+        This is important for macro suppression: if GCC expanded MAX_SPEED to 100,
+        the mapped original line contains MAX_SPEED, not raw 100, so this returns
+        None and the magic-number rule suppresses the false violation.
 
-        pycparser may see 100, but the original source line does not contain raw
-        100 at the usage site, so no magic-number location is returned.
+        If preferred_line is not supplied, return the first literal in source order
+        for compatibility with builtin/demo parsing.
         """
         wanted = canonical_numeric_token(raw_token)
         if wanted is None:
             return None
-
-        for idx in range(self._literal_cursor, len(self.numeric_literals)):
-            lit = self.numeric_literals[idx]
-            if lit.canonical == wanted:
-                self._literal_cursor = idx + 1
+        items = self._literal_by_canonical.get(wanted) or []
+        if not items:
+            return None
+        if preferred_line is None:
+            return items[0].location
+        for lit in items:
+            if lit.location.line == int(preferred_line):
                 return lit.location
-
-        for idx, lit in enumerate(self.numeric_literals):
-            if lit.canonical == wanted:
-                self._literal_cursor = idx + 1
-                return lit.location
-
         return None
 
+    def next_numeric_literal(self, raw_token: str) -> Optional[SourceLocation]:
+        """Backward-compatible alias. Prefer find_numeric_literal()."""
+        return self.find_numeric_literal(raw_token)
+
+    def dump_debug(self, output_path: str) -> None:
+        payload = {
+            "version": SIE_VERSION,
+            "file_path": self.file_path,
+            "line_count": self.line_count,
+            "functions": {
+                name: {
+                    "line": sym.location.line,
+                    "column": sym.location.column,
+                    "end_line": sym.end_line,
+                    "calls": [
+                        {"name": call, "line": loc.line, "column": loc.column}
+                        for call, loc in sym.calls
+                    ],
+                }
+                for name, sym in sorted(self.functions.items())
+            },
+            "declarations": {
+                name: [
+                    {
+                        "line": d.location.line,
+                        "column": d.location.column,
+                        "scope": d.scope,
+                        "storage": list(d.storage),
+                        "type_hint": d.type_hint,
+                    }
+                    for d in decls
+                ]
+                for name, decls in sorted(self.declarations.items())
+            },
+            "macros": {
+                name: {"line": m.location.line, "column": m.location.column, "function_like": m.function_like, "body": m.body}
+                for name, m in sorted(self.macros.items())
+            },
+            "includes": [
+                {"target": inc.target, "line": inc.location.line, "system": inc.system}
+                for inc in self.includes
+            ],
+            "numeric_literals": [
+                {"raw": lit.raw, "canonical": lit.canonical, "line": lit.location.line, "column": lit.location.column}
+                for lit in self.numeric_literals
+            ],
+        }
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+# ============================================================
+# Cache
+# ============================================================
 
 _CACHE: Dict[Tuple[str, float, int], SourceIndex] = {}
+_MAX_CACHE_ENTRIES = 128
+
+
+def clear_source_index_cache() -> None:
+    _CACHE.clear()
 
 
 def get_source_index(file_path: str) -> SourceIndex:
@@ -183,13 +270,19 @@ def get_source_index(file_path: str) -> SourceIndex:
         key = (path, 0.0, 0)
 
     cached = _CACHE.get(key)
-    if cached:
+    if cached is not None:
         return cached
 
     index = build_source_index(path)
-    _CACHE.clear()
+    if len(_CACHE) >= _MAX_CACHE_ENTRIES:
+        _CACHE.clear()
     _CACHE[key] = index
     return index
+
+
+# ============================================================
+# Build pipeline
+# ============================================================
 
 
 def build_source_index(file_path: str) -> SourceIndex:
@@ -202,18 +295,20 @@ def build_source_index(file_path: str) -> SourceIndex:
     stripped_text = strip_comments_preserve_lines(original_text)
     lines = stripped_text.splitlines()
 
-    index = SourceIndex(file_path=path)
+    index = SourceIndex(file_path=path, line_count=len(lines))
     _index_preprocessor(index, path, lines)
     _index_functions(index, path, lines)
     _index_declarations(index, path, lines)
     _index_calls(index, path, lines)
     _index_numeric_literals(index, path, lines)
+    index.finalize()
     return index
 
 
 # ============================================================
 # Comment stripping / lexical helpers
 # ============================================================
+
 
 def strip_comments_preserve_lines(text: str) -> str:
     """Remove C comments while preserving line numbers and approximate columns."""
@@ -286,6 +381,10 @@ def _brace_delta(line: str) -> int:
     return line.count("{") - line.count("}")
 
 
+def _paren_delta(line: str) -> int:
+    return line.count("(") - line.count(")")
+
+
 def _split_top_level_commas(text: str) -> List[str]:
     parts: List[str] = []
     current: List[str] = []
@@ -335,13 +434,56 @@ def _left_of_initializer(text: str) -> str:
     return "".join(out)
 
 
+def _statement_has_top_level_semicolon(line: str) -> bool:
+    depth_paren = depth_brace = depth_bracket = 0
+    for ch in line:
+        if ch == "(":
+            depth_paren += 1
+        elif ch == ")" and depth_paren > 0:
+            depth_paren -= 1
+        elif ch == "{":
+            depth_brace += 1
+        elif ch == "}" and depth_brace > 0:
+            depth_brace -= 1
+        elif ch == "[":
+            depth_bracket += 1
+        elif ch == "]" and depth_bracket > 0:
+            depth_bracket -= 1
+        elif ch == ";" and depth_paren == 0 and depth_brace == 0 and depth_bracket == 0:
+            return True
+    return False
+
+
+def _first_statement(text: str) -> str:
+    depth_paren = depth_brace = depth_bracket = 0
+    out: List[str] = []
+    for ch in text:
+        if ch == "(":
+            depth_paren += 1
+        elif ch == ")" and depth_paren > 0:
+            depth_paren -= 1
+        elif ch == "{":
+            depth_brace += 1
+        elif ch == "}" and depth_brace > 0:
+            depth_brace -= 1
+        elif ch == "[":
+            depth_bracket += 1
+        elif ch == "]" and depth_bracket > 0:
+            depth_bracket -= 1
+        elif ch == ";" and depth_paren == 0 and depth_brace == 0 and depth_bracket == 0:
+            break
+        out.append(ch)
+    return "".join(out)
+
+
 # ============================================================
 # Indexers
 # ============================================================
 
+
 def _index_preprocessor(index: SourceIndex, path: str, lines: List[str]) -> None:
     include_re = re.compile(r'^\s*#\s*include\s*([<"])([^>"]+)[>"]')
-    define_re = re.compile(r'^\s*#\s*define\s+([A-Za-z_]\w*)(?:\([^)]*\))?\s*(.*)$')
+    define_re = re.compile(r'^\s*#\s*define\s+([A-Za-z_]\w*)(\s*\([^)]*\))?\s*(.*)$')
 
     for lineno, line in enumerate(lines, start=1):
         inc = include_re.match(line)
@@ -361,77 +503,79 @@ def _index_preprocessor(index: SourceIndex, path: str, lines: List[str]) -> None
             index.macros[name] = MacroSymbol(
                 name=name,
                 location=SourceLocation(path, lineno, line.find(name) + 1),
-                body=macro.group(2).strip(),
+                function_like=bool(macro.group(2)),
+                body=(macro.group(3) or "").strip(),
             )
 
 
 def _index_functions(index: SourceIndex, path: str, lines: List[str]) -> None:
-    """Index function definitions from original source using bounded logic.
+    control_words = {"if", "for", "while", "switch", "return", "sizeof", "case", "do"}
+    qualifiers = r"(?:static\s+|extern\s+|inline\s+|const\s+|volatile\s+|register\s+|auto\s+|signed\s+|unsigned\s+|short\s+|long\s+|struct\s+|union\s+|enum\s+|[A-Za-z_]\w*\s+|\*\s*)+"
+    func_re = re.compile(r"^\s*" + qualifiers + r"(?P<name>[A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{")
 
-    This intentionally avoids broad regexes such as ``(?:word|space|*)+`` because
-    those can catastrophically backtrack on embedded generated declarations.
-    """
-    control_words = {"if", "for", "while", "switch", "return", "sizeof", "case", "do", "else"}
-    signature_parts: List[Tuple[int, str]] = []
-
-    def commit_signature(parts: List[Tuple[int, str]]) -> None:
-        if not parts:
-            return
-        combined = " ".join(txt.strip() for _, txt in parts)
-        before_brace = combined.split("{", 1)[0]
-        if ";" in before_brace or "(" not in before_brace or ")" not in before_brace:
-            return
-        # Function name is the identifier immediately before the parameter list.
-        m = re.search(r"\b([A-Za-z_]\w*)\s*\([^(){};]*\)\s*$", before_brace.strip())
-        if not m:
-            return
-        name = m.group(1)
-        if name in control_words or name in index.functions:
-            return
-        name_line, name_col = parts[0][0], 1
-        for lno, txt in parts:
-            pos = txt.find(name)
-            if pos >= 0:
-                name_line, name_col = lno, pos + 1
-                break
-        index.functions[name] = FunctionSymbol(
-            name=name,
-            location=SourceLocation(path, name_line, name_col),
-        )
+    pending: List[Tuple[int, str]] = []
+    paren_depth = 0
 
     for lineno, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
-            signature_parts.clear()
+            pending.clear()
+            paren_depth = 0
             continue
 
-        # Single-line or closing-line candidate. Do cheap string checks first.
-        if "{" in stripped and "(" in stripped and ")" in stripped:
-            if signature_parts:
-                signature_parts.append((lineno, line))
-                commit_signature(signature_parts)
-                signature_parts.clear()
-            else:
-                commit_signature([(lineno, line)])
+        one = func_re.match(line)
+        if one:
+            name = one.group("name")
+            if name not in control_words and name not in index.functions:
+                index.functions[name] = FunctionSymbol(name=name, location=SourceLocation(path, lineno, line.find(name) + 1))
+            pending.clear()
+            paren_depth = 0
             continue
 
-        # Bounded multiline signature collection. C signatures are normally short;
-        # cap this to avoid accidental accumulation through large initializer blocks.
-        if "(" in stripped and not stripped.endswith(";") and not stripped.startswith(tuple(control_words)):
-            signature_parts = [(lineno, line)]
+        # Multiline function signature. Avoid control statements and prototypes.
+        first_word = stripped.split("(", 1)[0].strip().split()[-1] if "(" in stripped and stripped.split("(", 1)[0].strip().split() else ""
+        if not pending and "(" in stripped and ";" not in stripped and first_word not in control_words:
+            pending = [(lineno, line)]
+            paren_depth = _paren_delta(line)
+            if "{" in line and paren_depth <= 0:
+                _finish_pending_function(index, path, pending, control_words)
+                pending.clear()
+                paren_depth = 0
             continue
 
-        if signature_parts:
-            signature_parts.append((lineno, line))
-            combined = " ".join(txt.strip() for _, txt in signature_parts)
-            if "{" in combined:
-                commit_signature(signature_parts)
-                signature_parts.clear()
-            elif ";" in combined or len(signature_parts) > 12:
-                signature_parts.clear()
+        if pending:
+            pending.append((lineno, line))
+            paren_depth += _paren_delta(line)
+            combined = " ".join(x[1].strip() for x in pending)
+            if ";" in combined:
+                pending.clear()
+                paren_depth = 0
+                continue
+            if "{" in combined and paren_depth <= 0:
+                _finish_pending_function(index, path, pending, control_words)
+                pending.clear()
+                paren_depth = 0
 
     for func in index.functions.values():
         func.end_line = _find_function_end(lines, func.location.line)
+
+
+def _finish_pending_function(index: SourceIndex, path: str, pending: List[Tuple[int, str]], control_words: set) -> None:
+    combined = " ".join(x[1].strip() for x in pending)
+    m = re.search(r"\b([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{", combined)
+    if not m:
+        return
+    name = m.group(1)
+    if name in control_words or name in index.functions:
+        return
+    name_line, name_col = pending[0][0], 1
+    for lno, txt in pending:
+        pos = txt.find(name)
+        if pos >= 0:
+            name_line, name_col = lno, pos + 1
+            break
+    index.functions[name] = FunctionSymbol(name=name, location=SourceLocation(path, name_line, name_col))
+
 
 def _find_function_end(lines: List[str], start_line: int) -> Optional[int]:
     depth = 0
@@ -463,7 +607,7 @@ def _active_function_at_line(index: SourceIndex, line: int) -> Optional[Function
 
 
 def _index_calls(index: SourceIndex, path: str, lines: List[str]) -> None:
-    control_words = {"if", "for", "while", "switch", "return", "sizeof"}
+    control_words = {"if", "for", "while", "switch", "return", "sizeof", "case", "do"}
     for lineno, line in enumerate(lines, start=1):
         func = _active_function_at_line(index, lineno)
         if not func:
@@ -479,49 +623,54 @@ def _index_declarations(index: SourceIndex, path: str, lines: List[str]) -> None
         "if", "for", "while", "switch", "return", "sizeof", "case", "else", "do",
         "typedef", "struct", "union", "enum", "const", "volatile", "static", "extern",
         "register", "auto", "signed", "unsigned", "short", "long", "void", "char",
-        "int", "float", "double", "bool", "inline",
+        "int", "float", "double", "bool", "inline", "restrict",
     }
     control_starts = ("if", "for", "while", "switch", "return", "case", "else", "do", "sizeof")
     type_start_re = re.compile(
-        r"^\s*(?:(?:static|const|volatile|extern|register|auto|inline)\s+)*"
+        r"^\s*(?:(?:static|const|volatile|extern|register|auto|inline|signed|unsigned|short|long)\s+)*"
         r"(?:(?:struct|union|enum)\s+)?[A-Za-z_]\w*"
     )
 
     logical_stmt = ""
     stmt_start_line = 1
+    brace_depth = 0
 
     for lineno, line in enumerate(lines, start=1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
-            logical_stmt = ""
             continue
 
-        # Prevent function signatures / bare braces from being accumulated into
-        # the next declaration. This fixes local static declarations immediately
-        # after an opening brace, e.g. `static bool btn_last = false;`.
-        if not logical_stmt:
-            if stripped in ("{", "}"):
-                continue
-            if "(" in stripped and ";" not in stripped and "=" not in stripped:
-                continue
+        # Skip block openers/function signatures so local declarations inside
+        # functions are not swallowed into a giant function-body statement.
+        if not logical_stmt and "{" in stripped and ";" not in stripped:
+            continue
+        if logical_stmt and stripped == "{" and ";" not in stripped:
+            logical_stmt = ""
+            continue
 
         if not logical_stmt:
             stmt_start_line = lineno
         logical_stmt += line + "\n"
 
-        # Declaration statement ends at semicolon. This also handles initializer blocks.
-        if ";" not in line:
+        # Do not terminate on semicolons inside initializer braces.
+        if not _statement_has_top_level_semicolon(logical_stmt):
+            # If this was a function/control signature that opened a block, drop it.
+            if "{" in logical_stmt and ";" not in logical_stmt:
+                logical_stmt = ""
             continue
 
-        statement = logical_stmt.split(";", 1)[0]
-        first_line_text = logical_stmt.splitlines()[0] if logical_stmt.splitlines() else ""
+        statement = _first_statement(logical_stmt)
         logical_stmt = ""
 
         stmt_strip = statement.strip()
-        if not stmt_strip or stmt_strip.startswith(control_starts):
+        if not stmt_strip:
             continue
-        if "(" in _left_of_initializer(statement) and ")" in _left_of_initializer(statement):
-            # Function prototype or call-like statement, not variable declaration.
+        first_token = stmt_strip.split(None, 1)[0]
+        if first_token in control_starts:
+            continue
+        left = _left_of_initializer(statement)
+        # Skip prototypes/function calls/casts in declarator area.
+        if "(" in left and ")" in left:
             continue
         if not type_start_re.match(statement):
             continue
@@ -539,23 +688,15 @@ def _index_declarations(index: SourceIndex, path: str, lines: List[str]) -> None
             ids = re.findall(r"\b[A-Za-z_]\w*\b", candidate)
             if not ids:
                 continue
-
             name = ids[-1]
             if name in keywords:
                 continue
             if part_index == 0 and len(ids) < 2:
                 continue
+            if name in index.functions:
+                continue
 
-            # Locate name in the original statement lines.
-            loc_line = stmt_start_line
-            loc_col = 1
-            for offset, txt in enumerate(statement.splitlines()):
-                pos = txt.find(name)
-                if pos >= 0:
-                    loc_line = stmt_start_line + offset
-                    loc_col = pos + 1
-                    break
-
+            loc_line, loc_col = _locate_name_in_statement(statement, stmt_start_line, name)
             type_hint = " ".join(ids[:-1])
             index.declarations.setdefault(name, []).append(
                 DeclarationSymbol(
@@ -566,6 +707,15 @@ def _index_declarations(index: SourceIndex, path: str, lines: List[str]) -> None
                     scope=scope,
                 )
             )
+
+
+def _locate_name_in_statement(statement: str, stmt_start_line: int, name: str) -> Tuple[int, int]:
+    word_re = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])")
+    for offset, txt in enumerate(statement.splitlines()):
+        m = word_re.search(txt)
+        if m:
+            return stmt_start_line + offset, m.start() + 1
+    return stmt_start_line, 1
 
 
 def _index_numeric_literals(index: SourceIndex, path: str, lines: List[str]) -> None:
@@ -595,6 +745,8 @@ def canonical_numeric_token(token: str) -> Optional[str]:
     if token is None:
         return None
     s = str(token).strip()
+    if not s:
+        return None
     s = re.sub(r"[uUlLfF]+$", "", s)
     try:
         if s.lower().startswith("0x"):

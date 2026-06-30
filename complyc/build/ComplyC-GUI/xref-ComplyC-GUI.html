@@ -254,10 +254,12 @@ imported by:
   <a target="code" href="///C:/Python311/Lib/__future__.py" type="text/plain"><tt>__future__</tt></a>
 <span class="moduletype">SourceModule</span>  <div class="import">
 imported by:
-    <a href="#complyc.project_discovery">complyc.project_discovery</a>
+    <a href="#complyc.compiler_extensions">complyc.compiler_extensions</a>
+ &#8226;   <a href="#complyc.project_discovery">complyc.project_discovery</a>
  &#8226;   <a href="#complyc.reporters">complyc.reporters</a>
  &#8226;   <a href="#complyc.rule_engine">complyc.rule_engine</a>
  &#8226;   <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
+ &#8226;   <a href="#complyc.type_recovery">complyc.type_recovery</a>
  &#8226;   <a href="#complyc_gui.py">complyc_gui.py</a>
 
   </div>
@@ -1267,7 +1269,8 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#random">random</a>
+    <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
+ &#8226;   <a href="#random">random</a>
  &#8226;   <a href="#statistics">statistics</a>
  &#8226;   <a href="#urllib.request">urllib.request</a>
 
@@ -1573,12 +1576,33 @@ imported by:
   <a target="code" href="///C:/GIT/GC/ComplyC_Project/ComplyC/complyc/__init__.py" type="text/plain"><tt>complyc</tt></a>
 <span class="moduletype">Package</span>  <div class="import">
 imported by:
-    <a href="#complyc.loader">complyc.loader</a>
+    <a href="#complyc.compiler_extensions">complyc.compiler_extensions</a>
+ &#8226;   <a href="#complyc.loader">complyc.loader</a>
  &#8226;   <a href="#complyc.parser">complyc.parser</a>
  &#8226;   <a href="#complyc.project_discovery">complyc.project_discovery</a>
  &#8226;   <a href="#complyc.reporters">complyc.reporters</a>
  &#8226;   <a href="#complyc.rule_engine">complyc.rule_engine</a>
  &#8226;   <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
+ &#8226;   <a href="#complyc.type_recovery">complyc.type_recovery</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="complyc.compiler_extensions"></a>
+  <a target="code" href="///C:/GIT/GC/ComplyC_Project/ComplyC/complyc/compiler_extensions.py" type="text/plain"><tt>complyc.compiler_extensions</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#complyc">complyc</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#typing">typing</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#complyc.parser">complyc.parser</a>
 
   </div>
 
@@ -1607,6 +1631,8 @@ imported by:
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
     <a href="#complyc">complyc</a>
+ &#8226;   <a href="#complyc.compiler_extensions">complyc.compiler_extensions</a>
+ &#8226;   <a href="#complyc.type_recovery">complyc.type_recovery</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#pycparser">pycparser</a>
@@ -1704,8 +1730,10 @@ imported by:
 <span class="moduletype">SourceModule</span>  <div class="import">
 imports:
     <a href="#__future__">__future__</a>
+ &#8226;   <a href="#bisect">bisect</a>
  &#8226;   <a href="#complyc">complyc</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#json">json</a>
  &#8226;   <a href="#os">os</a>
  &#8226;   <a href="#pathlib">pathlib</a>
  &#8226;   <a href="#re">re</a>
@@ -1715,6 +1743,26 @@ imports:
   <div class="import">
 imported by:
     <a href="#complyc.rule_engine">complyc.rule_engine</a>
+
+  </div>
+
+</div>
+
+<div class="node">
+  <a name="complyc.type_recovery"></a>
+  <a target="code" href="///C:/GIT/GC/ComplyC_Project/ComplyC/complyc/type_recovery.py" type="text/plain"><tt>complyc.type_recovery</tt></a>
+<span class="moduletype">SourceModule</span>  <div class="import">
+imports:
+    <a href="#__future__">__future__</a>
+ &#8226;   <a href="#complyc">complyc</a>
+ &#8226;   <a href="#dataclasses">dataclasses</a>
+ &#8226;   <a href="#re">re</a>
+ &#8226;   <a href="#typing">typing</a>
+
+  </div>
+  <div class="import">
+imported by:
+    <a href="#complyc.parser">complyc.parser</a>
 
   </div>
 
@@ -1864,6 +1912,7 @@ imported by:
  &#8226;   <a href="#complyc.reporters">complyc.reporters</a>
  &#8226;   <a href="#complyc.rule_engine">complyc.rule_engine</a>
  &#8226;   <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
+ &#8226;   <a href="#complyc.type_recovery">complyc.type_recovery</a>
  &#8226;   <a href="#pprint">pprint</a>
  &#8226;   <a href="#pycparser.c_lexer">pycparser.c_lexer</a>
  &#8226;   <a href="#pycparser.c_parser">pycparser.c_parser</a>
@@ -5417,7 +5466,6 @@ imports:
  &#8226;   <a href="#importlib">importlib</a>
  &#8226;   <a href="#importlib._bootstrap">importlib._bootstrap</a>
  &#8226;   <a href="#importlib._bootstrap_external">importlib._bootstrap_external</a>
- &#8226;   <a href="#importlib.machinery">importlib.machinery</a>
  &#8226;   <a href="#sys">sys</a>
  &#8226;   <a href="#warnings">warnings</a>
 
@@ -5548,8 +5596,7 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#importlib">importlib</a>
- &#8226;   <a href="#importlib.abc">importlib.abc</a>
+    <a href="#importlib.abc">importlib.abc</a>
  &#8226;   <a href="#inspect">inspect</a>
  &#8226;   <a href="#py_compile">py_compile</a>
 
@@ -6060,6 +6107,7 @@ imports:
 imported by:
     <a href="#complyc.project_discovery">complyc.project_discovery</a>
  &#8226;   <a href="#complyc.reporters">complyc.reporters</a>
+ &#8226;   <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
  &#8226;   <a href="#complyc_gui.py">complyc_gui.py</a>
  &#8226;   <a href="#json.decoder">json.decoder</a>
  &#8226;   <a href="#json.encoder">json.encoder</a>
@@ -6942,10 +6990,12 @@ imported by:
  &#8226;   <a href="#_strptime">_strptime</a>
  &#8226;   <a href="#argparse">argparse</a>
  &#8226;   <a href="#base64">base64</a>
+ &#8226;   <a href="#complyc.compiler_extensions">complyc.compiler_extensions</a>
  &#8226;   <a href="#complyc.parser">complyc.parser</a>
  &#8226;   <a href="#complyc.project_discovery">complyc.project_discovery</a>
  &#8226;   <a href="#complyc.rule_engine">complyc.rule_engine</a>
  &#8226;   <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
+ &#8226;   <a href="#complyc.type_recovery">complyc.type_recovery</a>
  &#8226;   <a href="#complyc_gui.py">complyc_gui.py</a>
  &#8226;   <a href="#csv">csv</a>
  &#8226;   <a href="#dataclasses">dataclasses</a>
@@ -8058,11 +8108,13 @@ imports:
   </div>
   <div class="import">
 imported by:
-    <a href="#complyc.parser">complyc.parser</a>
+    <a href="#complyc.compiler_extensions">complyc.compiler_extensions</a>
+ &#8226;   <a href="#complyc.parser">complyc.parser</a>
  &#8226;   <a href="#complyc.project_discovery">complyc.project_discovery</a>
  &#8226;   <a href="#complyc.reporters">complyc.reporters</a>
  &#8226;   <a href="#complyc.rule_engine">complyc.rule_engine</a>
  &#8226;   <a href="#complyc.source_index_engine">complyc.source_index_engine</a>
+ &#8226;   <a href="#complyc.type_recovery">complyc.type_recovery</a>
  &#8226;   <a href="#complyc_gui.py">complyc_gui.py</a>
  &#8226;   <a href="#functools">functools</a>
  &#8226;   <a href="#importlib.metadata">importlib.metadata</a>

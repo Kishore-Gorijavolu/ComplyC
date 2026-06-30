@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 from pycparser import CParser, c_ast
 
+from .compiler_extensions import sanitize_compiler_extensions
+from .type_recovery import apply_type_recovery
+
 
 # ============================================================
 #   GCC source mapping support
@@ -13,6 +16,10 @@ from pycparser import CParser, c_ast
 
 # Maps analyzed translation-unit path -> {preprocessed_line: (original_file, original_line)}
 _LAST_GCC_SOURCE_MAPS: Dict[str, Dict[int, Tuple[str, int]]] = {}
+
+# Number of synthetic typedef lines injected before pycparser sees the text.
+# Used to compensate source mapping in GCC mode.
+_LAST_SYNTHETIC_LINE_OFFSETS: Dict[str, int] = {}
 
 
 def _norm_path(path: str) -> str:
@@ -57,10 +64,15 @@ def get_mapped_source_location(translation_unit_path: str, preprocessed_line: Op
     """Return (original_file, original_line) for a pycparser/preprocessed line."""
     if preprocessed_line is None:
         return None
-    source_map = _LAST_GCC_SOURCE_MAPS.get(_norm_path(translation_unit_path))
+    key = _norm_path(translation_unit_path)
+    source_map = _LAST_GCC_SOURCE_MAPS.get(key)
     if not source_map:
         return None
-    return source_map.get(int(preprocessed_line))
+
+    adjusted_line = int(preprocessed_line) - _LAST_SYNTHETIC_LINE_OFFSETS.get(key, 0)
+    if adjusted_line < 1:
+        return None
+    return source_map.get(adjusted_line)
 
 
 # ============================================================
@@ -109,7 +121,7 @@ typedef _Bool               bool;
 def preprocess_code_for_pycparser(code: str) -> str:
     no_comments = remove_c_comments(code)
     no_pp = remove_preprocessor_directives(no_comments)
-    return inject_fake_typedefs(no_pp)
+    return sanitize_compiler_extensions(inject_fake_typedefs(no_pp))
 
 
 # ============================================================
@@ -256,42 +268,32 @@ def remove_line_markers_keep_line_count(code: str) -> str:
 # ============================================================
 
 def sanitize_gcc_output_for_pycparser(code: str) -> str:
-    forbidden = [
+    """
+    Sanitize GCC/preprocessor output before sending it to pycparser.
+
+    Compiler-specific syntax is delegated to compiler_extensions.py so parser.py
+    remains focused on preprocessing, source mapping, and AST construction.
+    """
+    # Remove/normalize compiler extensions while preserving surrounding C syntax.
+    code = sanitize_compiler_extensions(code)
+
+    # Drop pycparser-hostile generated/internal declarations that are not useful
+    # for ComplyC coding-guideline analysis. Keep these line-based removals narrow
+    # and avoid deleting user functions just because they had an attribute.
+    forbidden_line_patterns = [
         r'__gnuc_va_list',
         r'__builtin_va_list',
         r'__builtin_',
         r'__va_list_tag',
-        r'__asm__',
-        r'__asm',
-        r'__inline__',
-        r'__inline',
-        r'__attribute__',
-        r'__extension__',
-        r'__restrict__',
-        r'__restrict',
-        r'__typeof__',
-        r'__label__',
-        r'__interrupt',
-        r'__cregister',
     ]
 
-    for pat in forbidden:
+    for pat in forbidden_line_patterns:
         code = re.sub(rf'^.*{pat}.*$', '', code, flags=re.MULTILINE)
 
     code = re.sub(r'^typedef\s+.*__.*$', '', code, flags=re.MULTILINE)
     code = re.sub(r'^struct\s+__.*$', '', code, flags=re.MULTILINE)
     code = re.sub(r'^union\s+__.*$', '', code, flags=re.MULTILINE)
-    code = re.sub(r'__attribute__\s*\(\([^)]*\)\)', '', code)
-    code = re.sub(r'\b__\w+\b', '', code)
-    code = re.sub(r'^\s*\(\s*\)\s*$', '', code, flags=re.MULTILINE)
-    code = re.sub(r'^\s*\(\s*$', '', code, flags=re.MULTILINE)
 
-    # cleaned_lines = []
-    # for line in code.splitlines():
-    #     if line.strip() == "":
-    #         continue
-    #     cleaned_lines.append(line)
-    # return "\n".join(cleaned_lines)
     return code
 
 
@@ -312,6 +314,9 @@ def parse_c_file(
     For embedded projects, use_gcc=True with include_dirs and defines discovered
     from the project root.
     """
+    key = _norm_path(path)
+    _LAST_SYNTHETIC_LINE_OFFSETS[key] = 0
+
     if use_gcc:
         cleaned_code = preprocess_with_gcc(
             path,
@@ -325,6 +330,13 @@ def parse_c_file(
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
             code = f.read()
         cleaned_code = preprocess_code_for_pycparser(code)
+
+    # Type Recovery Engine: infer missing project/vendor typedefs and inject
+    # harmless placeholders before parsing. This dramatically reduces skipped
+    # files in embedded projects that use generated/custom types.
+    recovery = apply_type_recovery(cleaned_code)
+    cleaned_code = recovery.code
+    _LAST_SYNTHETIC_LINE_OFFSETS[key] = recovery.injected_line_count
 
     parser = CParser()
     return parser.parse(cleaned_code, filename=path)

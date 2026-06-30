@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 from .parser import get_mapped_source_location
-from .source_index_engine import get_source_index, SourceLocation
+from .source_index_engine import get_source_index, SourceLocation, SIE_VERSION
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -132,7 +132,10 @@ def get_node_name(node: Any) -> Optional[str]:
 
 
 def _source_index(ctx):
-    return ctx.get("source_index") or get_source_index(ctx["file_path"])
+    index = ctx.get("source_index")
+    if index is not None:
+        return index
+    return get_source_index(ctx["file_path"])
 
 
 def _raw_coord_line(node: Any) -> Optional[int]:
@@ -209,12 +212,32 @@ def resolve_numeric_literal_location(cn: c_ast.Constant, ctx) -> Optional[Tuple[
     """
     Find a numeric literal in the ORIGINAL source text.
 
-    If GCC expanded a macro, e.g. MAX_SPEED -> 100, then 100 will exist in the
-    preprocessed AST but not as a raw literal at the original usage site. In that
-    case this returns None, and the magic-number rule suppresses the violation.
+    GCC may expand a macro constant before pycparser sees it. Example:
+        #define MAX_SPEED 100
+        if (speed > MAX_SPEED)
+
+    The AST sees 100, but the original source line contains MAX_SPEED. The
+    deterministic lookup below uses the mapped original line where available; if
+    that line does not contain the raw literal, this returns None and the
+    magic-number rule suppresses the false violation.
     """
     graph = _source_index(ctx)
-    loc = graph.next_numeric_literal(str(getattr(cn, "value", "")))
+    token = str(getattr(cn, "value", ""))
+
+    preferred_line = None
+    coord = getattr(cn, "coord", None)
+    analyzed_line = getattr(coord, "line", None)
+    if analyzed_line is not None:
+        mapped = get_mapped_source_location(ctx["file_path"], analyzed_line)
+        if mapped:
+            mapped_file, mapped_line = mapped
+            try:
+                if mapped_file and mapped_file.lower() == ctx["file_path"].lower():
+                    preferred_line = mapped_line
+            except Exception:
+                preferred_line = mapped_line
+
+    loc = graph.find_numeric_literal(token, preferred_line=preferred_line)
     if loc:
         return loc.file, loc.line
 
@@ -611,8 +634,11 @@ def run_rules(ast: c_ast.FileAST, rules: List[Dict[str, Any]], file_path: str) -
         file_lines = f.readlines()
 
     parent_map = build_parent_map(ast)
-    #source_index = get_source_index(file_path)
-    source_index = None #--> Used for Debug only
+    try:
+        source_index = get_source_index(file_path)
+    except Exception as exc:
+        print(f"[ComplyC] Source Index Engine unavailable for {file_path}: {exc}")
+        source_index = None
 
     ctx_base = {
         "file_path": file_path,
