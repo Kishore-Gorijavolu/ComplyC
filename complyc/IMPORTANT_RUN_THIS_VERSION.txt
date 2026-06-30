@@ -1,0 +1,14 @@
+ComplyC fixed source version
+============================
+
+Run this fixed version from source using:
+
+    RUN_FROM_SOURCE.bat
+
+Do not use any previously built ComplyC-GUI.exe. A PyInstaller EXE bundles old Python code and will not pick up fixes made to the .py files until the EXE is rebuilt.
+
+Main fixes in this package:
+- Source Index Engine regex hang fixed.
+- Local static declaration indexing fixed.
+- GUI scan now runs in an external worker process so the Tkinter UI is protected from scan hangs.
+- GCC preprocessing has timeout protection.

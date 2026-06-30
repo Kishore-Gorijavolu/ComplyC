@@ -182,11 +182,25 @@ def preprocess_with_gcc(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            timeout=30,
         )
     except FileNotFoundError:
         raise RuntimeError(
             "gcc.exe was not found. Install MinGW-w64 or add gcc.exe to PATH."
         )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            "GCC preprocessing timed out after 30 seconds.\n\n"
+            "This usually means GCC is stuck processing project includes, recursive macros, "
+            "or a very large generated header.\n\n"
+            "Try:\n"
+            "1. Remove unnecessary include folders.\n"
+            "2. Disable auto-detected include folders and add only required paths.\n"
+            "3. Add missing compiler defines.\n"
+            "4. Run Built-in Demo mode for lightweight scans.\n\n"
+            "Command:\n"
+            + " ".join(cmd)
+        ) from e
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
             "GCC preprocessing failed.\n\n"
@@ -236,12 +250,66 @@ def remove_line_markers_keep_line_count(code: str) -> str:
 
     return "\n".join(cleaned_lines)
 
+def remove_gcc_attributes(code: str) -> str:
+    """
+    Remove GCC-style __attribute__((...)) blocks while preserving the
+    surrounding declaration/function syntax.
+
+    This is required for embedded/compiler-generated files where attributes
+    are commonly used for interrupt handlers, section placement, weak symbols,
+    alignment, noinline/used, etc.
+
+    Example:
+        __attribute__((section(".main_function"))) void TIMG1_IRQHandler(void)
+    becomes:
+        void TIMG1_IRQHandler(void)
+    """
+    result: List[str] = []
+    i = 0
+
+    while i < len(code):
+        if code.startswith("__attribute__", i):
+            i += len("__attribute__")
+
+            while i < len(code) and code[i].isspace():
+                i += 1
+
+            if i < len(code) and code[i] == "(":
+                depth = 0
+                while i < len(code):
+                    if code[i] == "(":
+                        depth += 1
+                    elif code[i] == ")":
+                        depth -= 1
+                        if depth == 0:
+                            i += 1
+                            break
+                    i += 1
+
+                # Preserve a single space so tokens on either side of the
+                # removed attribute do not accidentally merge.
+                result.append(" ")
+                continue
+
+            # If malformed, keep scanning without deleting unrelated text.
+            result.append(" ")
+            continue
+
+        result.append(code[i])
+        i += 1
+
+    return "".join(result)
+
 
 # ============================================================
 #   GCC output sanitization for pycparser
 # ============================================================
 
 def sanitize_gcc_output_for_pycparser(code: str) -> str:
+    # Remove attributes before line-based forbidden filtering.
+    # Important: do not delete the whole declaration line just because it contains __attribute__.
+    code = remove_gcc_attributes(code)
+
     forbidden = [
         r'__gnuc_va_list',
         r'__builtin_va_list',
@@ -251,7 +319,6 @@ def sanitize_gcc_output_for_pycparser(code: str) -> str:
         r'__asm',
         r'__inline__',
         r'__inline',
-        r'__attribute__',
         r'__extension__',
         r'__restrict__',
         r'__restrict',
@@ -267,7 +334,6 @@ def sanitize_gcc_output_for_pycparser(code: str) -> str:
     code = re.sub(r'^typedef\s+.*__.*$', '', code, flags=re.MULTILINE)
     code = re.sub(r'^struct\s+__.*$', '', code, flags=re.MULTILINE)
     code = re.sub(r'^union\s+__.*$', '', code, flags=re.MULTILINE)
-    code = re.sub(r'__attribute__\s*\(\([^)]*\)\)', '', code)
     code = re.sub(r'\b__\w+\b', '', code)
     code = re.sub(r'^\s*\(\s*\)\s*$', '', code, flags=re.MULTILINE)
     code = re.sub(r'^\s*\(\s*$', '', code, flags=re.MULTILINE)

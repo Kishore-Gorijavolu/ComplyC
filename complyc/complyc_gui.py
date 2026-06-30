@@ -9,6 +9,7 @@ import json
 import subprocess
 import sys
 import threading
+import queue
 import traceback
 import webbrowser
 from collections import Counter
@@ -60,6 +61,8 @@ class ComplyCGui(tk.Tk):
         self.last_json_report: Path | None = None
         self.last_html_report: Path | None = None
         self.last_error_report: Path | None = None
+        self._scan_running = False
+        self._ui_queue: queue.Queue = queue.Queue()
 
         self.project_root_var = tk.StringVar(value="")
         self.rules_path_var = tk.StringVar(value=str(default_rules_path()) if default_rules_path().exists() else "")
@@ -346,10 +349,11 @@ class ComplyCGui(tk.Tk):
             listbox.insert(tk.END, value)
 
     def run_scan_threaded(self) -> None:
-        thread = threading.Thread(target=self.run_scan, daemon=True)
-        thread.start()
+        """Start scan in a background thread without touching Tk widgets from worker."""
+        if self._scan_running:
+            messagebox.showinfo(APP_TITLE, "A scan is already running. Please wait for it to finish.")
+            return
 
-    def run_scan(self) -> None:
         rules_path = self.rules_path_var.get().strip()
         if not rules_path or not os.path.isfile(rules_path):
             self._show_error("Rules file is missing or invalid.")
@@ -358,27 +362,64 @@ class ComplyCGui(tk.Tk):
             self._show_error("Please select a project or add at least one .c file.")
             return
 
+        # Snapshot UI state on the main thread. Worker must not read Tk variables.
+        scan_config = {
+            "rules_path": rules_path,
+            "selected_files": list(self.selected_files),
+            "include_dirs": list(self.include_dirs),
+            "defines": list(self.defines),
+            "use_gcc": self.preprocessor_var.get() == "gcc",
+            "report_dir": default_reports_dir(),
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+        }
+
+        self._scan_running = True
         self._set_busy(True)
+        self.status_var.set("Running scan...")
+        self.summary_var.set("Scan running...")
+        self._clear_tree()
+
         try:
-            self.status_var.set("Running scan...")
-            self._clear_tree()
+            while True:
+                self._ui_queue.get_nowait()
+        except queue.Empty:
+            pass
+
+        worker = threading.Thread(
+            target=self._run_scan_worker,
+            args=(scan_config,),
+            daemon=True,
+            name="ComplyCScanWorker",
+        )
+        worker.start()
+        self.after(100, self._process_ui_queue)
+
+    def _run_scan_worker(self, scan_config: dict) -> None:
+        """Background scan worker. Do not call Tkinter APIs in this method."""
+        try:
+            rules_path = scan_config["rules_path"]
+            selected_files = scan_config["selected_files"]
+            include_dirs = scan_config["include_dirs"]
+            defines = scan_config["defines"]
+            use_gcc = scan_config["use_gcc"]
+            report_dir: Path = scan_config["report_dir"]
+            timestamp = scan_config["timestamp"]
 
             _style, rules = load_rules(rules_path)
-            use_gcc = self.preprocessor_var.get() == "gcc"
 
             per_file_violations: Dict[str, List[Violation]] = {}
             failed_files: List[dict] = []
             severity_counter: Counter[str] = Counter()
 
-            total_files = len(self.selected_files)
-            for index, file_path in enumerate(self.selected_files, start=1):
-                self.status_var.set(f"Scanning {index}/{total_files}: {os.path.basename(file_path)}")
+            total_files = len(selected_files)
+            for index, file_path in enumerate(selected_files, start=1):
+                self._ui_queue.put(("status", f"Scanning {index}/{total_files}: {os.path.basename(file_path)}"))
                 try:
                     ast = parse_c_file(
                         file_path,
                         use_gcc=use_gcc,
-                        include_dirs=self.include_dirs if use_gcc else [],
-                        defines=self.defines if use_gcc else [],
+                        include_dirs=include_dirs if use_gcc else [],
+                        defines=defines if use_gcc else [],
                     )
                     violations = run_rules(ast, rules, file_path)
                     per_file_violations[file_path] = violations
@@ -396,37 +437,78 @@ class ComplyCGui(tk.Tk):
                     print(tb)
                     continue
 
-            report_dir = default_reports_dir()
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.last_json_report = report_dir / f"complyc_report_{timestamp}.json"
-            self.last_html_report = report_dir / f"complyc_report_{timestamp}.html"
-            self.last_error_report = report_dir / f"complyc_scan_errors_{timestamp}.html"
+            json_report = report_dir / f"complyc_report_{timestamp}.json"
+            html_report = report_dir / f"complyc_report_{timestamp}.html"
+            error_report = report_dir / f"complyc_scan_errors_{timestamp}.html"
 
-            write_json_report(per_file_violations, str(self.last_json_report))
-            write_html_report(per_file_violations, str(self.last_html_report))
+            write_json_report(per_file_violations, str(json_report))
+            write_html_report(per_file_violations, str(html_report))
             self._write_error_reports(failed_files, report_dir, timestamp)
 
             data = violations_to_dict(per_file_violations)
-            self._populate_results(data, failed_files)
-
-            scanned_ok = len(per_file_violations)
-            failed = len(failed_files)
-            self.status_var.set(
-                f"Scan completed. Successful: {scanned_ok}, Failed/skipped: {failed}. Reports written to: {report_dir}"
-            )
-
-            if failed:
-                self.after(0, lambda: messagebox.showwarning(
-                    APP_TITLE,
-                    f"Scan completed with {failed} failed/skipped file(s).\n\n"
-                    f"Compliance reports were generated for the {scanned_ok} file(s) that parsed successfully.\n"
-                    f"Open the Error Report for details."
-                ))
+            self._ui_queue.put(("done", {
+                "data": data,
+                "failed_files": failed_files,
+                "json_report": json_report,
+                "html_report": html_report,
+                "error_report": error_report,
+                "report_dir": report_dir,
+            }))
         except Exception as exc:
-            traceback.print_exc()
-            self._show_error(f"Scan setup failed:\n{exc}")
-        finally:
-            self._set_busy(False)
+            tb = traceback.format_exc()
+            print(tb)
+            self._ui_queue.put(("fatal", "Scan setup failed:\n" + str(exc)))
+
+    def _process_ui_queue(self) -> None:
+        """Apply queued worker messages safely on the Tk main thread."""
+        try:
+            while True:
+                kind, payload = self._ui_queue.get_nowait()
+
+                if kind == "status":
+                    self.status_var.set(str(payload))
+
+                elif kind == "done":
+                    self.last_json_report = payload["json_report"]
+                    self.last_html_report = payload["html_report"]
+                    self.last_error_report = payload["error_report"]
+
+                    self._populate_results(payload["data"], payload["failed_files"])
+
+                    scanned_ok = payload["data"]["summary"]["total_files"]
+                    failed = len(payload["failed_files"])
+                    self.status_var.set(
+                        f"Scan completed. Successful: {scanned_ok}, Failed/skipped: {failed}. "
+                        f"Reports written to: {payload['report_dir']}"
+                    )
+
+                    if failed:
+                        messagebox.showwarning(
+                            APP_TITLE,
+                            f"Scan completed with {failed} failed/skipped file(s).\n\n"
+                            f"Compliance reports were generated for the {scanned_ok} file(s) that parsed successfully.\n"
+                            f"Open the Error Report for details."
+                        )
+
+                    self._scan_running = False
+                    self._set_busy(False)
+                    return
+
+                elif kind == "fatal":
+                    self._scan_running = False
+                    self._set_busy(False)
+                    self._show_error(str(payload))
+                    return
+
+        except queue.Empty:
+            pass
+
+        if self._scan_running:
+            self.after(100, self._process_ui_queue)
+
+    def run_scan(self) -> None:
+        """Backward-compatible entry point for any old caller."""
+        self.run_scan_threaded()
 
     def _populate_results(self, data: dict, failed_files: List[dict] | None = None) -> None:
         failed_files = failed_files or []
@@ -521,7 +603,10 @@ pre { white-space: pre-wrap; background: #f8f8f8; border: 1px solid #ddd; paddin
     
     def _set_busy(self, busy: bool) -> None:
         def apply():
-            self.run_button.configure(state=tk.DISABLED if busy else tk.NORMAL)
+            self.run_button.configure(
+                state=tk.DISABLED if busy else tk.NORMAL,
+                text="Scanning..." if busy else "Run Scan",
+            )
             self.config(cursor="watch" if busy else "")
         self.after(0, apply)
 
