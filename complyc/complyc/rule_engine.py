@@ -74,21 +74,36 @@ def iter_nodes_by_scope(ast: c_ast.FileAST, scope: str):
             if scope == "call_expression":
                 self.results.append((node, {}))
             self.generic_visit(node)
+            
+        # def visit_For(self, node: c_ast.For):
+        #     if scope in ("loop_statement", "for_statement", "condition"):
+        #         self.results.append((node, {}))
+        #     self.generic_visit(node)
+            
+        def visit_While(self, node: c_ast.While):
+            if scope in ("loop_statement", "while_statement", "condition", "control_statement"):
+                self.results.append((node, {}))
+            self.generic_visit(node)
+        
+        def visit_DoWhile(self, node: c_ast.DoWhile):
+            if scope in ("loop_statement", "do_while_statement", "condition", "control_statement"):
+                self.results.append((node, {}))
+            self.generic_visit(node)
 
         def visit_If(self, node: c_ast.If):
-            if scope in ("if_statement", "condition"):
+            if scope in ("if_statement", "condition", "control_statement"):
                 self.results.append((node, {}))
             self.generic_visit(node)
 
         def visit_For(self, node: c_ast.For):
-            if scope in ("loop_statement", "for_statement"):
+            if scope in ("loop_statement", "for_statement", "condition", "control_statement"):
                 self.results.append((node, {}))
             self.generic_visit(node)
 
-        def visit_While(self, node: c_ast.While):
-            if scope in ("loop_statement", "while_statement"):
-                self.results.append((node, {}))
-            self.generic_visit(node)
+        # def visit_While(self, node: c_ast.While):
+        #     if scope in ("loop_statement", "while_statement", "control_statement"):
+        #         self.results.append((node, {}))
+        #     self.generic_visit(node)
 
         def visit_Switch(self, node: c_ast.Switch):
             if scope == "switch_statement":
@@ -611,6 +626,605 @@ def check_magic_number(node, rule, ctx) -> List[Violation]:
     maybe_flag(node)
     return violations
 
+def check_no_assignment_in_condition(node, rule, ctx) -> List[Violation]:
+    condition = getattr(node, "cond", None)
+    if condition is None:
+        return []
+
+    violations: List[Violation] = []
+
+    class AssignmentInConditionVisitor(c_ast.NodeVisitor):
+        def visit_Assignment(self, assign_node: c_ast.Assignment):
+            report_file, report_line = resolve_report_location(assign_node, ctx)
+
+            violations.append(Violation(
+                rule_id=rule["id"],
+                message=(
+                    f"Assignment operator '{assign_node.op}' used inside a condition. "
+                    f"{rule.get('guidance', '')}"
+                ),
+                file=report_file,
+                line=report_line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            ))
+
+            self.generic_visit(assign_node)
+
+    AssignmentInConditionVisitor().visit(condition)
+    return violations
+
+def check_switch_requires_default(node: c_ast.Switch, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.Switch):
+        return []
+
+    has_default = False
+
+    class DefaultVisitor(c_ast.NodeVisitor):
+        def visit_Default(self, default_node: c_ast.Default):
+            nonlocal has_default
+            has_default = True
+
+    DefaultVisitor().visit(node)
+
+    if has_default:
+        return []
+
+    report_file, report_line = resolve_report_location(node, ctx)
+
+    return [Violation(
+        rule_id=rule["id"],
+        message=f"Switch statement does not contain a default label. {rule.get('guidance', '')}",
+        file=report_file,
+        line=report_line,
+        severity=rule.get("severity"),
+        reference=rule.get("reference"),
+    )]
+
+def check_no_empty_statement(node, rule, ctx) -> List[Violation]:
+    """
+    Detect accidental empty statements such as
+
+        if (x);
+        while(flag);
+        for(...);
+
+    """
+
+    violations = []
+
+    report_node = None
+
+    if isinstance(node, c_ast.If):
+        if isinstance(node.iftrue, c_ast.EmptyStatement):
+            report_node = node.iftrue
+
+        elif node.iffalse and isinstance(node.iffalse, c_ast.EmptyStatement):
+            report_node = node.iffalse
+
+    elif isinstance(node, c_ast.While):
+        if isinstance(node.stmt, c_ast.EmptyStatement):
+            report_node = node.stmt
+
+    elif isinstance(node, c_ast.For):
+        if isinstance(node.stmt, c_ast.EmptyStatement):
+            report_node = node.stmt
+
+    elif isinstance(node, c_ast.DoWhile):
+        if isinstance(node.stmt, c_ast.EmptyStatement):
+            report_node = node.stmt
+
+    if report_node is not None:
+
+        report_file, report_line = resolve_report_location(
+            report_node,
+            ctx
+        )
+
+        violations.append(
+            Violation(
+                rule_id=rule["id"],
+                message=(
+                    "Empty statement detected. "
+                    + rule.get("guidance", "")
+                ),
+                file=report_file,
+                line=report_line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            )
+        )
+
+    return violations
+
+def check_no_empty_block(node, rule, ctx) -> List[Violation]:
+    violations: List[Violation] = []
+
+    allowed_comments = [
+        str(item).lower()
+        for item in rule.get("allowed_comments", [])
+    ]
+    
+    source_lines = (
+        ctx.get("file_lines")
+        or ctx.get("source_lines")
+        or ctx.get("original_lines")
+    )
+    # source_lines = getattr(ctx, "source_lines", None) -> Debug Development
+    if source_lines is None:
+        return []
+    #     source_lines = getattr(ctx, "original_lines", None) -> Debug Development
+
+    def has_allowed_empty_comment(block_node: c_ast.Compound) -> bool:
+        if source_lines is None:
+            return False
+
+        coord = getattr(block_node, "coord", None)
+        if coord is None or coord.line is None:
+            return False
+
+        start_line = coord.line
+
+        # Check a small range after the opening brace.
+        # This catches:
+        # {
+        #     /* intentionally empty */
+        # }
+        for line_no in range(start_line, min(start_line + 5, len(source_lines))):
+            line_text = source_lines[line_no - 1].lower()
+            if any(token in line_text for token in allowed_comments):
+                return True
+
+        return False
+
+    def check_compound_block(block_node):
+        if not isinstance(block_node, c_ast.Compound):
+            return
+
+        if block_node.block_items:
+            return
+
+        if has_allowed_empty_comment(block_node):
+            return
+
+        report_file, report_line = resolve_report_location(block_node, ctx)
+
+        violations.append(Violation(
+            rule_id=rule["id"],
+            message=(
+                "Empty control block detected without an intentional-empty comment. "
+                f"{rule.get('guidance', '')}"
+            ),
+            file=report_file,
+            line=report_line,
+            severity=rule.get("severity"),
+            reference=rule.get("reference"),
+        ))
+
+    if isinstance(node, c_ast.If):
+        check_compound_block(node.iftrue)
+
+        if node.iffalse is not None:
+            check_compound_block(node.iffalse)
+
+    elif isinstance(node, (c_ast.For, c_ast.While, c_ast.DoWhile)):
+        check_compound_block(node.stmt)
+
+    return violations
+
+def check_no_unreachable_code(node: c_ast.FuncDef, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.FuncDef):
+        return []
+
+    violations: List[Violation] = []
+
+    terminating_types = (
+        c_ast.Return,
+        c_ast.Break,
+        c_ast.Continue,
+        c_ast.Goto,
+    )
+
+    def is_terminating_statement(stmt) -> bool:
+        return isinstance(stmt, terminating_types)
+
+    def report_unreachable(stmt):
+        report_file, report_line = resolve_report_location(stmt, ctx)
+
+        violations.append(Violation(
+            rule_id=rule["id"],
+            message=(
+                "Unreachable code detected after a terminating statement. "
+                f"{rule.get('guidance', '')}"
+            ),
+            file=report_file,
+            line=report_line,
+            severity=rule.get("severity"),
+            reference=rule.get("reference"),
+        ))
+
+    def scan_statement_list(statements):
+        if not statements:
+            return
+
+        terminated = False
+
+        for stmt in statements:
+            if stmt is None:
+                continue
+
+            if terminated:
+                report_unreachable(stmt)
+                # Continue scanning to catch multiple unreachable statements.
+                scan_nested(stmt)
+                continue
+
+            scan_nested(stmt)
+
+            if is_terminating_statement(stmt):
+                terminated = True
+
+    def scan_nested(stmt):
+        if isinstance(stmt, c_ast.Compound):
+            scan_statement_list(stmt.block_items)
+
+        elif isinstance(stmt, c_ast.If):
+            scan_nested(stmt.iftrue)
+            if stmt.iffalse is not None:
+                scan_nested(stmt.iffalse)
+
+        elif isinstance(stmt, (c_ast.For, c_ast.While, c_ast.DoWhile)):
+            scan_nested(stmt.stmt)
+
+        elif isinstance(stmt, c_ast.Switch):
+            scan_nested(stmt.stmt)
+
+        elif isinstance(stmt, c_ast.Case):
+            scan_statement_list(stmt.stmts)
+
+        elif isinstance(stmt, c_ast.Default):
+            scan_statement_list(stmt.stmts)
+
+    scan_nested(node.body)
+    return violations
+
+def check_no_implicit_fallthrough(node: c_ast.Switch, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.Switch):
+        return []
+
+    violations: List[Violation] = []
+
+    terminating_types = (
+        c_ast.Break,
+        c_ast.Return,
+        c_ast.Continue,
+        c_ast.Goto,
+    )
+
+    allowed_comments = [
+        str(item).lower()
+        for item in rule.get("allowed_comments", [])
+    ]
+
+    source_lines = getattr(ctx, "source_lines", None)
+    if source_lines is None:
+        source_lines = getattr(ctx, "original_lines", None)
+
+    def is_terminating_statement(stmt) -> bool:
+        return isinstance(stmt, terminating_types)
+
+    def get_last_executable_statement(statements):
+        if not statements:
+            return None
+
+        for stmt in reversed(statements):
+            if stmt is not None:
+                return stmt
+
+        return None
+
+    def has_fallthrough_comment(case_node: c_ast.Case) -> bool:
+        if source_lines is None:
+            return False
+
+        statements = getattr(case_node, "stmts", None)
+        if not statements:
+            return False
+
+        last_stmt = get_last_executable_statement(statements)
+        if last_stmt is None:
+            return False
+
+        last_coord = getattr(last_stmt, "coord", None)
+        case_coord = getattr(case_node, "coord", None)
+
+        if last_coord is None or last_coord.line is None:
+            return False
+
+        start_line = last_coord.line
+        end_line = start_line + 4
+
+        # Search only a few lines after the last statement.
+        # This supports:
+        #
+        # case 1:
+        #     result = 10;
+        #     /* fallthrough */
+        # case 2:
+        #
+        max_line = len(source_lines)
+
+        for line_no in range(start_line, min(end_line, max_line) + 1):
+            line_text = source_lines[line_no - 1].lower()
+
+            if any(token in line_text for token in allowed_comments):
+                return True
+
+            # Stop if the next case/default appears before comment.
+            stripped = line_text.strip()
+            if line_no != start_line and (
+                stripped.startswith("case ") or stripped.startswith("default:")
+            ):
+                return False
+
+        return False
+
+    def flatten_switch_labels(switch_node: c_ast.Switch):
+        labels = []
+
+        body = getattr(switch_node, "stmt", None)
+        if not isinstance(body, c_ast.Compound):
+            return labels
+
+        block_items = body.block_items or []
+
+        for item in block_items:
+            if isinstance(item, (c_ast.Case, c_ast.Default)):
+                labels.append(item)
+
+        return labels
+
+    labels = flatten_switch_labels(node)
+
+    for index, label in enumerate(labels):
+        # Last label cannot fall through into another switch label.
+        if index == len(labels) - 1:
+            continue
+
+        # default can also fall through if it appears before another case.
+        statements = getattr(label, "stmts", None)
+
+        # Empty case labels are commonly used for grouping:
+        #
+        # case 1:
+        # case 2:
+        #     do_something();
+        #
+        # Do not flag empty labels.
+        if not statements:
+            continue
+
+        last_stmt = get_last_executable_statement(statements)
+
+        if last_stmt is None:
+            continue
+
+        if is_terminating_statement(last_stmt):
+            continue
+
+        if has_fallthrough_comment(label):
+            continue
+
+        report_file, report_line = resolve_report_location(label, ctx)
+
+        violations.append(Violation(
+            rule_id=rule["id"],
+            message=(
+                "Switch case may fall through into the next case without an explicit fallthrough comment. "
+                f"{rule.get('guidance', '')}"
+            ),
+            file=report_file,
+            line=report_line,
+            severity=rule.get("severity"),
+            reference=rule.get("reference"),
+        ))
+
+    return violations
+
+def check_forbid_keyword(node, rule, ctx) -> List[Violation]:
+    violations: List[Violation] = []
+
+    keyword = str(rule.get("keyword", "")).lower()
+
+    if keyword != "goto":
+        return violations
+
+    class GotoVisitor(c_ast.NodeVisitor):
+        def visit_Goto(self, goto_node: c_ast.Goto):
+            report_file, report_line = resolve_report_location(goto_node, ctx)
+
+            violations.append(Violation(
+                rule_id=rule["id"],
+                message=f"Use of forbidden keyword 'goto'. {rule.get('guidance', '')}",
+                file=report_file,
+                line=report_line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            ))
+
+    GotoVisitor().visit(node)
+    return violations
+
+def check_empty_function_body(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.FuncDef):
+        return []
+
+    body = node.body
+
+    if body.block_items:
+        return []
+
+    source_lines = (
+        ctx.get("file_lines")
+        or ctx.get("source_lines")
+        or ctx.get("original_lines")
+    )
+
+    allowed_comments = [
+        str(item).lower()
+        for item in rule.get("allowed_comments", [])
+    ]
+
+    def has_allowed_comment():
+        if source_lines is None:
+            return False
+
+        coord = getattr(body, "coord", None)
+        if coord is None or coord.line is None:
+            return False
+
+        start_line = coord.line
+
+        for line_no in range(start_line, min(start_line + 8, len(source_lines))):
+            line_text = source_lines[line_no - 1].lower()
+
+            if any(token in line_text for token in allowed_comments):
+                return True
+
+        return False
+
+    if has_allowed_comment():
+        return []
+
+    report_file, report_line = resolve_report_location(body, ctx)
+
+    return [Violation(
+        rule_id=rule["id"],
+        message=f"Function body is empty. {rule.get('guidance', '')}",
+        file=report_file,
+        line=report_line,
+        severity=rule.get("severity"),
+        reference=rule.get("reference"),
+    )]
+
+def check_no_infinite_loops(node, rule, ctx) -> List[Violation]:
+    violations = []
+
+    source_lines = (
+        ctx.get("file_lines")
+        or ctx.get("source_lines")
+        or ctx.get("original_lines")
+    )
+
+    allowed_comments = [
+        str(item).lower()
+        for item in rule.get("allowed_comments", [])
+    ]
+
+    def is_constant_true(expr):
+        if expr is None:
+            return True
+
+        if isinstance(expr, c_ast.Constant):
+            return expr.value in ("1", "true", "TRUE")
+
+        if isinstance(expr, c_ast.ID):
+            return expr.name in ("true", "TRUE")
+
+        return False
+
+    def has_intentional_comment(loop_node):
+        if source_lines is None:
+            return False
+
+        coord = getattr(loop_node, "coord", None)
+        if coord is None or coord.line is None:
+            return False
+
+        start_line = coord.line
+
+        for line_no in range(start_line, min(start_line + 8, len(source_lines))):
+            line_text = source_lines[line_no - 1].lower()
+
+            if any(token in line_text for token in allowed_comments):
+                return True
+
+        return False
+
+    class InfiniteLoopVisitor(c_ast.NodeVisitor):
+        def visit_While(self, while_node):
+            if is_constant_true(while_node.cond):
+                if not has_intentional_comment(while_node):
+                    report_file, report_line = resolve_report_location(while_node, ctx)
+
+                    violations.append(Violation(
+                        rule_id=rule["id"],
+                        message=f"Possible infinite while loop detected. {rule.get('guidance', '')}",
+                        file=report_file,
+                        line=report_line,
+                        severity=rule.get("severity"),
+                        reference=rule.get("reference"),
+                    ))
+
+            self.generic_visit(while_node)
+
+        def visit_For(self, for_node):
+            if for_node.cond is None:
+                if not has_intentional_comment(for_node):
+                    report_file, report_line = resolve_report_location(for_node, ctx)
+
+                    violations.append(Violation(
+                        rule_id=rule["id"],
+                        message=f"Possible infinite for loop detected. {rule.get('guidance', '')}",
+                        file=report_file,
+                        line=report_line,
+                        severity=rule.get("severity"),
+                        reference=rule.get("reference"),
+                    ))
+
+            self.generic_visit(for_node)
+
+        def visit_DoWhile(self, do_node):
+            if is_constant_true(do_node.cond):
+                if not has_intentional_comment(do_node):
+                    report_file, report_line = resolve_report_location(do_node, ctx)
+
+                    violations.append(Violation(
+                        rule_id=rule["id"],
+                        message=f"Possible infinite do-while loop detected. {rule.get('guidance', '')}",
+                        file=report_file,
+                        line=report_line,
+                        severity=rule.get("severity"),
+                        reference=rule.get("reference"),
+                    ))
+
+            self.generic_visit(do_node)
+
+    InfiniteLoopVisitor().visit(node)
+    return violations
+
+# ---------- SUPPORTED_SCOPES ----------
+SUPPORTED_SCOPES = {
+    "file",
+    "function",
+    "condition",
+    "switch_statement",
+    "control_statement",
+    "if_statement",
+    "while_statement",
+    "do_while_statement",
+    "for_statement",
+    "loop_statement",
+    "call_expression",
+    "variable",
+    "static_variable",
+    "global_variable",
+    "typedef",
+    "struct_definition",
+    "enum_definition",
+    "enum_constant",
+    "literal",
+}
 
 # ---------- dispatcher ----------
 
@@ -624,6 +1238,15 @@ CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[V
     "max_nesting_depth": check_max_nesting_depth,
     "magic_number": check_magic_number,
     "global_naming": check_global_naming,
+    "no_assignment_in_condition": check_no_assignment_in_condition,
+    "switch_requires_default": check_switch_requires_default,
+    "no_empty_statement": check_no_empty_statement,
+    "no_empty_block": check_no_empty_block,
+    "no_unreachable_code": check_no_unreachable_code,
+    "no_implicit_fallthrough": check_no_implicit_fallthrough,
+    "forbid_keyword": check_forbid_keyword,
+    "empty_function_body": check_empty_function_body,
+    "no_infinite_loops": check_no_infinite_loops,
 }
 
 
@@ -650,12 +1273,35 @@ def run_rules(ast: c_ast.FileAST, rules: List[Dict[str, Any]], file_path: str) -
     all_violations: List[Violation] = []
 
     for rule in rules:
+        # scope = rule.get("scope", "file")
+        # check_name = rule.get("check")
+        # if not check_name:
+        #     continue
+        # handler = CHECK_HANDLERS.get(check_name)
+        # if handler is None:
+        #     continue
+        
         scope = rule.get("scope", "file")
         check_name = rule.get("check")
-        if not check_name:
+        rule_id = rule.get("id", "<unknown>")
+
+        if scope not in SUPPORTED_SCOPES:
+            print(
+                f"[ComplyC] WARNING: Rule {rule_id} uses unsupported scope '{scope}'. "
+                "Rule skipped."
+            )
             continue
+
+        if not check_name:
+            print(f"[ComplyC] WARNING: Rule {rule_id} has no check field. Rule skipped.")
+            continue
+
         handler = CHECK_HANDLERS.get(check_name)
         if handler is None:
+            print(
+                f"[ComplyC] WARNING: Rule {rule_id} uses unknown check handler "
+                f"'{check_name}'. Rule skipped."
+            )
             continue
 
         for node, extra in iter_nodes_by_scope(ast, scope):
