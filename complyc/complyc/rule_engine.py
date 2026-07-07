@@ -1310,6 +1310,58 @@ def check_elseif_must_end_with_else(node, rule, ctx) -> List[Violation]:
     # Final branch exists and is not another If, so it is an else block.
     return []
 
+def check_require_braces(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.FuncDef):
+        return []
+
+    violations: List[Violation] = []
+
+    def report(control_node, control_name: str):
+        report_file, report_line = resolve_report_location(control_node, ctx)
+
+        violations.append(Violation(
+            rule_id=rule["id"],
+            message=(
+                f"{control_name} statement body does not use braces. "
+                f"{rule.get('guidance', '')}"
+            ),
+            file=report_file,
+            line=report_line,
+            severity=rule.get("severity"),
+            reference=rule.get("reference"),
+        ))
+
+    class BraceVisitor(c_ast.NodeVisitor):
+        def visit_If(self, if_node: c_ast.If):
+            if if_node.iftrue is not None and not isinstance(if_node.iftrue, c_ast.Compound):
+                report(if_node, "if")
+
+            # else-if is represented as iffalse = If.
+            # Do not require braces around else-if itself.
+            if if_node.iffalse is not None:
+                if not isinstance(if_node.iffalse, (c_ast.Compound, c_ast.If)):
+                    report(if_node.iffalse, "else")
+
+            self.generic_visit(if_node)
+
+        def visit_For(self, for_node: c_ast.For):
+            if for_node.stmt is not None and not isinstance(for_node.stmt, c_ast.Compound):
+                report(for_node, "for")
+            self.generic_visit(for_node)
+
+        def visit_While(self, while_node: c_ast.While):
+            if while_node.stmt is not None and not isinstance(while_node.stmt, c_ast.Compound):
+                report(while_node, "while")
+            self.generic_visit(while_node)
+
+        def visit_DoWhile(self, do_node: c_ast.DoWhile):
+            if do_node.stmt is not None and not isinstance(do_node.stmt, c_ast.Compound):
+                report(do_node, "do-while")
+            self.generic_visit(do_node)
+
+    BraceVisitor().visit(node)
+    return violations
+
 # ---------- SUPPORTED_SCOPES ----------
 SUPPORTED_SCOPES = {
     "file",
@@ -1332,6 +1384,64 @@ SUPPORTED_SCOPES = {
     "enum_constant",
     "literal",
 }
+
+def check_brace_own_line(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.FileAST):
+        return []
+
+    violations: List[Violation] = []
+
+    source_lines = (
+        ctx.get("file_lines")
+        or ctx.get("source_lines")
+        or ctx.get("original_lines")
+    )
+
+    if source_lines is None:
+        return []
+
+    control_pattern = re.compile(
+        r'\b(if|else|for|while|switch|do)\b'
+    )
+
+    function_pattern = re.compile(
+        r'^\s*[A-Za-z_][A-Za-z0-9_\s\*\(\)]*\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^;]*\)\s*\{'
+    )
+
+    for index, line in enumerate(source_lines, start=1):
+        stripped = line.strip()
+
+        if "{" not in line:
+            continue
+
+        # Allow initializer lists / struct initializers for now.
+        if "=" in line and "{" in line:
+            continue
+
+        has_code_before_brace = stripped != "{"
+
+        if not has_code_before_brace:
+            continue
+
+        is_control = bool(control_pattern.search(line))
+        is_function = bool(function_pattern.search(line))
+
+        if not is_control and not is_function:
+            continue
+
+        violations.append(Violation(
+            rule_id=rule["id"],
+            message=(
+                "Opening brace is not on its own line. "
+                f"{rule.get('guidance', '')}"
+            ),
+            file=ctx["file_path"],
+            line=index,
+            severity=rule.get("severity"),
+            reference=rule.get("reference"),
+        ))
+
+    return violations
 
 # ---------- dispatcher ----------
 
@@ -1357,6 +1467,8 @@ CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[V
     "max_length": check_max_length,
     "forbid_single_letter": check_forbid_single_letter,
     "elseif_must_end_with_else": check_elseif_must_end_with_else,
+    "require_braces": check_require_braces,
+    "brace_own_line": check_brace_own_line,
 }
 
 

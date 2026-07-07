@@ -106,7 +106,7 @@ rules:
 
   - id: FORMAT_INDENT_001
     title: "Indentation must be consistent"
-    scope: file
+    scope: function
     check: consistent_indentation
     severity: minor
     guidance: "Use either tabs or spaces consistently."
@@ -114,7 +114,7 @@ rules:
 
   - id: FORMAT_BRACE_001
     title: "Curly braces required for all control bodies"
-    scope: block
+    scope: function
     check: require_braces
     severity: major
     guidance: "Always use braces."
@@ -122,7 +122,7 @@ rules:
 
   - id: BRACE_STYLE_002
     title: "Opening brace must be on its own line"
-    scope: block
+    scope: file
     check: brace_own_line
     severity: major
     guidance: "Place '{' on a new line."
