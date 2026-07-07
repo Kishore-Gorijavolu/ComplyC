@@ -1203,6 +1203,113 @@ def check_no_infinite_loops(node, rule, ctx) -> List[Violation]:
     InfiniteLoopVisitor().visit(node)
     return violations
 
+def check_max_length(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.Decl):
+        return []
+
+    name = getattr(node, "name", None)
+    if not name:
+        return []
+
+    # Skip function declarations/prototypes
+    decl_type = node.type
+    while hasattr(decl_type, "type") and not isinstance(decl_type, c_ast.FuncDecl):
+        decl_type = decl_type.type
+
+    if isinstance(decl_type, c_ast.FuncDecl):
+        return []
+
+    max_len = int(rule.get("max_length", 31))
+
+    if len(name) <= max_len:
+        return []
+
+    report_file, report_line = resolve_report_location(node, ctx, name)
+
+    return [Violation(
+        rule_id=rule["id"],
+        message=(
+            f"Identifier '{name}' has length {len(name)} "
+            f"(max {max_len}). {rule.get('guidance', '')}"
+        ),
+        file=report_file,
+        line=report_line,
+        severity=rule.get("severity"),
+        reference=rule.get("reference"),
+    )]
+
+def check_forbid_single_letter(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.Decl):
+        return []
+
+    name = getattr(node, "name", None)
+    if not name:
+        return []
+
+    # Skip function declarations/prototypes
+    decl_type = node.type
+    while hasattr(decl_type, "type") and not isinstance(decl_type, c_ast.FuncDecl):
+        decl_type = decl_type.type
+
+    if isinstance(decl_type, c_ast.FuncDecl):
+        return []
+
+    allowed_names = {
+        str(item)
+        for item in rule.get("allowed_names", [])
+    }
+
+    if len(name) != 1:
+        return []
+
+    if name in allowed_names:
+        return []
+
+    report_file, report_line = resolve_report_location(node, ctx, name)
+
+    return [Violation(
+        rule_id=rule["id"],
+        message=(
+            f"Single-letter variable name '{name}' is not allowed. "
+            f"{rule.get('guidance', '')}"
+        ),
+        file=report_file,
+        line=report_line,
+        severity=rule.get("severity"),
+        reference=rule.get("reference"),
+    )]
+
+def check_elseif_must_end_with_else(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.If):
+        return []
+
+    # Only check the start of an else-if chain.
+    if not isinstance(node.iffalse, c_ast.If):
+        return []
+
+    current = node.iffalse
+
+    while isinstance(current, c_ast.If):
+        if current.iffalse is None:
+            report_file, report_line = resolve_report_location(node, ctx)
+
+            return [Violation(
+                rule_id=rule["id"],
+                message=(
+                    "else-if chain does not end with a final else branch. "
+                    f"{rule.get('guidance', '')}"
+                ),
+                file=report_file,
+                line=report_line,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            )]
+
+        current = current.iffalse
+
+    # Final branch exists and is not another If, so it is an else block.
+    return []
+
 # ---------- SUPPORTED_SCOPES ----------
 SUPPORTED_SCOPES = {
     "file",
@@ -1247,6 +1354,9 @@ CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[V
     "forbid_keyword": check_forbid_keyword,
     "empty_function_body": check_empty_function_body,
     "no_infinite_loops": check_no_infinite_loops,
+    "max_length": check_max_length,
+    "forbid_single_letter": check_forbid_single_letter,
+    "elseif_must_end_with_else": check_elseif_must_end_with_else,
 }
 
 
