@@ -134,7 +134,7 @@ rules:
     check: no_recursion
     severity: critical
     guidance: "Rewrite recursive logic."
-    reference: "Safety Rule"
+    reference: "MISRA C:2012 Rule 17.2 inspired"
 
   - id: SAFETY_DYNAMIC_MEM_001
     title: "Dynamic memory allocation is forbidden"

@@ -1362,28 +1362,41 @@ def check_require_braces(node, rule, ctx) -> List[Violation]:
     BraceVisitor().visit(node)
     return violations
 
-# ---------- SUPPORTED_SCOPES ----------
-SUPPORTED_SCOPES = {
-    "file",
-    "function",
-    "condition",
-    "switch_statement",
-    "control_statement",
-    "if_statement",
-    "while_statement",
-    "do_while_statement",
-    "for_statement",
-    "loop_statement",
-    "call_expression",
-    "variable",
-    "static_variable",
-    "global_variable",
-    "typedef",
-    "struct_definition",
-    "enum_definition",
-    "enum_constant",
-    "literal",
-}
+def check_no_recursion(node, rule, ctx) -> List[Violation]:
+    if not isinstance(node, c_ast.FuncDef):
+        return []
+
+    function_name = getattr(node.decl, "name", None)
+    if not function_name:
+        return []
+
+    violations: List[Violation] = []
+
+    class DirectRecursionVisitor(c_ast.NodeVisitor):
+        def visit_FuncCall(self, call_node: c_ast.FuncCall):
+            if isinstance(call_node.name, c_ast.ID):
+                called_name = call_node.name.name
+
+                if called_name == function_name:
+                    report_file, report_line = resolve_report_location(call_node, ctx)
+
+                    violations.append(Violation(
+                        rule_id=rule["id"],
+                        message=(
+                            f"Function '{function_name}' calls itself directly. "
+                            f"{rule.get('guidance', '')}"
+                        ),
+                        file=report_file,
+                        line=report_line,
+                        severity=rule.get("severity"),
+                        reference=rule.get("reference"),
+                    ))
+
+            self.generic_visit(call_node)
+
+    DirectRecursionVisitor().visit(node.body)
+    return violations
+
 
 def check_brace_own_line(node, rule, ctx) -> List[Violation]:
     if not isinstance(node, c_ast.FileAST):
@@ -1443,6 +1456,29 @@ def check_brace_own_line(node, rule, ctx) -> List[Violation]:
 
     return violations
 
+# ---------- SUPPORTED_SCOPES ----------
+SUPPORTED_SCOPES = {
+    "file",
+    "function",
+    "condition",
+    "switch_statement",
+    "control_statement",
+    "if_statement",
+    "while_statement",
+    "do_while_statement",
+    "for_statement",
+    "loop_statement",
+    "call_expression",
+    "variable",
+    "static_variable",
+    "global_variable",
+    "typedef",
+    "struct_definition",
+    "enum_definition",
+    "enum_constant",
+    "literal",
+}
+
 # ---------- dispatcher ----------
 
 CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[Violation]]] = {
@@ -1469,6 +1505,7 @@ CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[V
     "elseif_must_end_with_else": check_elseif_must_end_with_else,
     "require_braces": check_require_braces,
     "brace_own_line": check_brace_own_line,
+    "no_recursion": check_no_recursion,
 }
 
 
