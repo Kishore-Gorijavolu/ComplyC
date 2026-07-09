@@ -1,4 +1,5 @@
 import re
+import sys
 import subprocess
 import tempfile
 import os
@@ -188,14 +189,26 @@ def preprocess_with_gcc(
     cmd.extend([path, "-o", tmp_out_path])
 
     try:
-        subprocess.run(
-            cmd,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=30,
-        )
+        # subprocess.run(
+        #     cmd,
+        #     check=True,
+        #     stdout=subprocess.PIPE,
+        #     stderr=subprocess.PIPE,
+        #     text=True,
+        #     timeout=30,
+        # )
+        run_kwargs = {
+            "check": True,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "text": True,
+            "timeout": 30,
+        }
+
+        if sys.platform.startswith("win"):
+            run_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+        subprocess.run(cmd, **run_kwargs)
     except FileNotFoundError:
         raise RuntimeError(
             "gcc.exe was not found. Install MinGW-w64 or add gcc.exe to PATH."

@@ -12,6 +12,7 @@ import threading
 import queue
 import traceback
 import webbrowser
+import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -177,7 +178,16 @@ class ComplyCGui(tk.Tk):
         action.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         self.run_button = ttk.Button(action, text="Run Scan", command=self.run_scan_threaded)
         self.run_button.grid(row=0, column=0, padx=(0, 8))
-
+        self.progress_var = tk.DoubleVar(value=0.0)
+        self.progress_bar = ttk.Progressbar(
+            action,
+            variable=self.progress_var,
+            maximum=100,
+            mode="determinate",
+            length=180,
+        )
+        self.progress_bar.grid(row=0, column=6, sticky="w", padx=(12, 0))
+        
         ttk.Button(
             action,
             text="Clear Results",
@@ -371,12 +381,14 @@ class ComplyCGui(tk.Tk):
             "use_gcc": self.preprocessor_var.get() == "gcc",
             "report_dir": default_reports_dir(),
             "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "start_time": time.perf_counter(),
         }
 
         self._scan_running = True
         self._set_busy(True)
         self.status_var.set("Running scan...")
         self.summary_var.set("Scan running...")
+        self.progress_var.set(0.0)
         self._clear_tree()
 
         try:
@@ -404,6 +416,7 @@ class ComplyCGui(tk.Tk):
             use_gcc = scan_config["use_gcc"]
             report_dir: Path = scan_config["report_dir"]
             timestamp = scan_config["timestamp"]
+            start_time = scan_config["start_time"]
 
             _style, rules = load_rules(rules_path)
 
@@ -413,7 +426,11 @@ class ComplyCGui(tk.Tk):
 
             total_files = len(selected_files)
             for index, file_path in enumerate(selected_files, start=1):
+                progress = int((index - 1) * 100 / total_files)
+                self._ui_queue.put(("progress", progress))
+                
                 self._ui_queue.put(("status", f"Scanning {index}/{total_files}: {os.path.basename(file_path)}"))
+                
                 try:
                     ast = parse_c_file(
                         file_path,
@@ -425,6 +442,9 @@ class ComplyCGui(tk.Tk):
                     per_file_violations[file_path] = violations
                     for v in violations:
                         severity_counter[(v.severity or "unspecified").lower()] += 1
+                        
+                    # progress = int(index * 100 / total_files)
+                    # self._ui_queue.put(("progress", progress))
                 except Exception as file_exc:
                     tb = traceback.format_exc()
                     failed_files.append({
@@ -435,7 +455,9 @@ class ComplyCGui(tk.Tk):
                     })
                     print(f"[ComplyC] Skipping failed file: {file_path}")
                     print(tb)
-                    continue
+                finally:
+                    progress = int(index * 100 / total_files)
+                    self._ui_queue.put(("progress", progress))
 
             json_report = report_dir / f"complyc_report_{timestamp}.json"
             html_report = report_dir / f"complyc_report_{timestamp}.html"
@@ -446,6 +468,7 @@ class ComplyCGui(tk.Tk):
             self._write_error_reports(failed_files, report_dir, timestamp)
 
             data = violations_to_dict(per_file_violations)
+            elapsed_seconds = time.perf_counter() - start_time
             self._ui_queue.put(("done", {
                 "data": data,
                 "failed_files": failed_files,
@@ -453,6 +476,7 @@ class ComplyCGui(tk.Tk):
                 "html_report": html_report,
                 "error_report": error_report,
                 "report_dir": report_dir,
+                "elapsed_seconds": elapsed_seconds,
             }))
         except Exception as exc:
             tb = traceback.format_exc()
@@ -467,7 +491,8 @@ class ComplyCGui(tk.Tk):
 
                 if kind == "status":
                     self.status_var.set(str(payload))
-
+                elif kind == "progress":
+                    self.progress_var.set(float(payload))
                 elif kind == "done":
                     self.last_json_report = payload["json_report"]
                     self.last_html_report = payload["html_report"]
@@ -477,11 +502,16 @@ class ComplyCGui(tk.Tk):
 
                     scanned_ok = payload["data"]["summary"]["total_files"]
                     failed = len(payload["failed_files"])
+                    
+                    elapsed_seconds = payload.get("elapsed_seconds", 0.0)
+                    
                     self.status_var.set(
-                        f"Scan completed. Successful: {scanned_ok}, Failed/skipped: {failed}. "
+                        f"Scan completed in {elapsed_seconds:.2f}s. "
+                        f"Successful: {scanned_ok}, Failed/skipped: {failed}. "
                         f"Reports written to: {payload['report_dir']}"
                     )
-
+                    
+                    self.progress_var.set(100.0)
                     if failed:
                         messagebox.showwarning(
                             APP_TITLE,
@@ -498,6 +528,7 @@ class ComplyCGui(tk.Tk):
                     self._scan_running = False
                     self._set_busy(False)
                     self._show_error(str(payload))
+                    self.progress_var.set(0.0)
                     return
 
         except queue.Empty:
