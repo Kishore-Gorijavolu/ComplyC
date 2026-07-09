@@ -106,7 +106,7 @@ rules:
 
   - id: FORMAT_INDENT_001
     title: "Indentation must be consistent"
-    scope: file
+    scope: function
     check: consistent_indentation
     severity: minor
     guidance: "Use either tabs or spaces consistently."
@@ -114,7 +114,7 @@ rules:
 
   - id: FORMAT_BRACE_001
     title: "Curly braces required for all control bodies"
-    scope: block
+    scope: function
     check: require_braces
     severity: major
     guidance: "Always use braces."
@@ -122,7 +122,7 @@ rules:
 
   - id: BRACE_STYLE_002
     title: "Opening brace must be on its own line"
-    scope: block
+    scope: file
     check: brace_own_line
     severity: major
     guidance: "Place '{' on a new line."
@@ -134,7 +134,7 @@ rules:
     check: no_recursion
     severity: critical
     guidance: "Rewrite recursive logic."
-    reference: "Safety Rule"
+    reference: "MISRA C:2012 Rule 17.2 inspired"
 
   - id: SAFETY_DYNAMIC_MEM_001
     title: "Dynamic memory allocation is forbidden"
@@ -159,7 +159,7 @@ rules:
 
   - id: FORBIDDEN_GOTO_001
     title: "goto is forbidden"
-    scope: statement
+    scope: function
     check: forbid_keyword
     keyword: "goto"
     severity: major
@@ -210,6 +210,14 @@ rules:
     guidance: "Reduce argument count."
     reference: "Industry Practice"
     
+  - id: DEAD_CODE_EMPTY_FUNC_001
+    title: "Function body shall not be empty or contain only commented-out code"
+    scope: function
+    check: empty_function_body
+    max_parameters: 6
+    severity: major
+    guidance: "Reduce argument count."
+    reference: "Industry Practice"
   # - id: UNINIT_VAR_001
   #   title: "Variable must be initialized before use"
   #   scope: file
@@ -233,5 +241,81 @@ rules:
   #   severity: minor
   #   guidance: "Remove unused variables or use them meaningfully to avoid confusion and reduce maintenance risk."
   #   reference: "Code quality guideline §4.2 Unused items"
+  - id: MISRA_LITE_ASSIGN_COND_001
+    title: "Assignment shall not be used in conditional expressions"
+    scope: condition
+    check: no_assignment_in_condition
+    severity: critical
+    guidance: "Use comparison operators in conditions. If assignment is intentional, move it before the condition and test the assigned value explicitly."
+    reference: "MISRA C:2012 Rule 13.4 / Rule 14.4 inspired"
 
+  - id: DEAD_CODE_EMPTY_STMT_001
+    title: "Empty statements shall not be used"
+    scope: control_statement
+    check: no_empty_statement
+    severity: major
+    guidance: "Remove stray semicolons and avoid empty control-flow bodies. If an empty body is intentional, document it clearly."
+    reference: "MISRA C:2012 Rule 14.3 / Rule 15.x inspired"
+  
+  - id: CTRL_EMPTY_BLOCK_001
+    title: "Empty control blocks shall contain an intentional-empty comment"
+    scope: control_statement
+    check: no_empty_block
+    severity: minor
+    guidance: "If a control block is intentionally empty, add a comment such as 'intentionally empty' or 'no action required'."
+    reference: "MISRA C:2012 Rule 15.7 / Rule 14.3 inspired"
+    allowed_comments:
+      - "intentionally empty"
+      - "intentional empty"
+      - "no action required"
+      - "do nothing"
+      - "no operation"
+      - "Nothing"
+
+  - id: CTRL_SWITCH_DEFAULT_001
+    title: "Switch statements shall have a default label"
+    scope: switch_statement
+    check: switch_requires_default
+    severity: major
+    guidance: "Add a default case to handle unexpected values, even if the default only contains a defensive comment or error handling."
+    reference: "MISRA C:2012 Rule 16.4 inspired"
+
+  - id: CTRL_SWITCH_FALLTHROUGH_001
+    title: "Implicit switch case fall-through is forbidden"
+    scope: switch_statement
+    check: no_implicit_fallthrough
+    allowed_comments:
+      - "fall through"
+      - "fallthrough"
+      - "intentional fallthrough"
+    severity: major
+    guidance: "Terminate each switch case with break, return, goto, or clearly documented intentional fall-through."
+    reference: "MISRA C:2012 Rule 16.3 inspired"
+
+  - id: DEAD_CODE_UNREACHABLE_001
+    title: "Unreachable code shall not be present"
+    scope: function
+    check: no_unreachable_code
+    severity: major
+    guidance: "Remove statements that can never execute after return, break, continue, or goto."
+    reference: "MISRA C:2012 Rule 2.1 inspired"
+
+  - id: SAFETY_FORBIDDEN_API_001
+    title: "Unsafe C library functions are forbidden"
+    scope: call_expression
+    check: forbidden_functions
+    functions:
+      - "gets"
+      - "strcpy"
+      - "strncpy"
+      - "strcat"
+      - "strncat"
+      - "sprintf"
+      - "vsprintf"
+      - "scanf"
+      - "sscanf"
+      - "fscanf"
+    severity: critical
+    guidance: "Use bounded, project-approved wrapper APIs instead of unsafe or ambiguous standard library calls."
+    reference: "MISRA/CERT secure C practice inspired"
 
