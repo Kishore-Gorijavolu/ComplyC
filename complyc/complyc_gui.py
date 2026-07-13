@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import html
 import json
+import shutil
 import subprocess
 import sys
 import threading
@@ -25,7 +26,7 @@ from complyc.loader import load_rules
 from complyc.parser import parse_c_file
 from complyc.project_discovery import ProjectInfo, discover_project
 from complyc.rule_engine import run_rules, Violation
-from complyc.reporters import write_json_report, write_html_report, violations_to_dict
+from complyc.reporters import write_csv_report, write_json_report, write_html_report, violations_to_dict
 
 
 APP_TITLE = "ComplyC GUI"
@@ -61,9 +62,11 @@ class ComplyCGui(tk.Tk):
         self.defines: List[str] = []
         self.last_json_report: Path | None = None
         self.last_html_report: Path | None = None
+        self.last_csv_report: Path | None = None
         self.last_error_report: Path | None = None
         self._scan_running = False
         self._ui_queue: queue.Queue = queue.Queue()
+        self._violation_locations: Dict[str, tuple[str, int]] = {}
 
         self.project_root_var = tk.StringVar(value="")
         self.rules_path_var = tk.StringVar(value=str(default_rules_path()) if default_rules_path().exists() else "")
@@ -186,7 +189,7 @@ class ComplyCGui(tk.Tk):
             mode="determinate",
             length=180,
         )
-        self.progress_bar.grid(row=0, column=6, sticky="w", padx=(12, 0))
+        self.progress_bar.grid(row=1, column=0, columnspan=7, sticky="ew", pady=(8, 0))
         
         ttk.Button(
             action,
@@ -202,20 +205,26 @@ class ComplyCGui(tk.Tk):
 
         ttk.Button(
             action,
+            text="CSV Report",
+            command=self.open_csv_report,
+        ).grid(row=0, column=3, padx=(0, 8))
+
+        ttk.Button(
+            action,
             text="Reports Folder",
             command=self.open_reports_folder,
-        ).grid(row=0, column=3, padx=(0, 8))
+        ).grid(row=0, column=4, padx=(0, 8))
 
         ttk.Button(
             action,
             text="Error Report",
             command=self.open_error_report,
-        ).grid(row=0, column=4, padx=(0, 8))
+        ).grid(row=0, column=5, padx=(0, 8))
 
         ttk.Label(
             action,
             textvariable=self.summary_var,
-        ).grid(row=0, column=5, sticky="w", padx=(12, 0))
+        ).grid(row=0, column=6, sticky="w", padx=(12, 0))
 
         violations_frame = ttk.LabelFrame(right, text="Violations", padding=8)
         violations_frame.grid(row=1, column=0, sticky="nsew")
@@ -236,6 +245,7 @@ class ComplyCGui(tk.Tk):
         xscroll = ttk.Scrollbar(violations_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
+        self.tree.bind("<Double-1>", self.open_selected_violation)
         yscroll.grid(row=0, column=1, sticky="ns")
         xscroll.grid(row=1, column=0, sticky="ew")
 
@@ -461,10 +471,12 @@ class ComplyCGui(tk.Tk):
 
             json_report = report_dir / f"complyc_report_{timestamp}.json"
             html_report = report_dir / f"complyc_report_{timestamp}.html"
+            csv_report = report_dir / f"complyc_report_{timestamp}.csv"
             error_report = report_dir / f"complyc_scan_errors_{timestamp}.html"
 
             write_json_report(per_file_violations, str(json_report))
             write_html_report(per_file_violations, str(html_report))
+            write_csv_report(per_file_violations, str(csv_report))
             self._write_error_reports(failed_files, report_dir, timestamp)
 
             data = violations_to_dict(per_file_violations)
@@ -474,6 +486,7 @@ class ComplyCGui(tk.Tk):
                 "failed_files": failed_files,
                 "json_report": json_report,
                 "html_report": html_report,
+                "csv_report": csv_report,
                 "error_report": error_report,
                 "report_dir": report_dir,
                 "elapsed_seconds": elapsed_seconds,
@@ -496,6 +509,7 @@ class ComplyCGui(tk.Tk):
                 elif kind == "done":
                     self.last_json_report = payload["json_report"]
                     self.last_html_report = payload["html_report"]
+                    self.last_csv_report = payload["csv_report"]
                     self.last_error_report = payload["error_report"]
 
                     self._populate_results(payload["data"], payload["failed_files"])
@@ -541,32 +555,154 @@ class ComplyCGui(tk.Tk):
         """Backward-compatible entry point for any old caller."""
         self.run_scan_threaded()
 
-    def _populate_results(self, data: dict, failed_files: List[dict] | None = None) -> None:
+    def _populate_results(
+        self,
+        data: dict,
+        failed_files: List[dict] | None = None,
+    ) -> None:
         failed_files = failed_files or []
         summary = data["summary"]
-        sev_text = ", ".join(f"{sev}: {count}" for sev, count in summary["by_severity"].items()) or "none"
+
+        sev_text = ", ".join(
+            f"{severity}: {count}"
+            for severity, count in summary["by_severity"].items()
+        ) or "none"
+
         self.summary_var.set(
-            f"Parsed: {summary['total_files']} | Failed: {len(failed_files)} | "
-            f"Violations: {summary['total_violations']} | Severity: {sev_text}"
+            f"Parsed: {summary['total_files']} | "
+            f"Failed: {len(failed_files)} | "
+            f"Violations: {summary['total_violations']} | "
+            f"Severity: {sev_text}"
         )
 
+        self._violation_locations.clear()
+
         for file_entry in data["files"]:
-            file_name = os.path.basename(file_entry["file"])
-            for v in file_entry["violations"]:
-                self.tree.insert(
+            full_file_path = file_entry["file"]
+            file_name = os.path.basename(full_file_path)
+
+            for violation in file_entry["violations"]:
+                raw_line = violation.get("line")
+
+                try:
+                    line_number = int(raw_line) if raw_line else 1
+                except (TypeError, ValueError):
+                    line_number = 1
+
+                item_id = self.tree.insert(
                     "",
                     tk.END,
                     values=(
                         file_name,
-                        v.get("line") or "",
-                        v.get("rule_id") or "",
-                        v.get("severity") or "unspecified",
-                        v.get("message") or "",
-                        v.get("reference") or "",
+                        line_number,
+                        violation.get("rule_id") or "",
+                        violation.get("severity") or "unspecified",
+                        violation.get("message") or "",
+                        violation.get("reference") or "",
                     ),
                 )
 
+                self._violation_locations[item_id] = (
+                    full_file_path,
+                    line_number,
+                )
+            
+    def open_selected_violation(self, event=None) -> None:
+        item_id = self.tree.focus()
 
+        if not item_id:
+            selected_items = self.tree.selection()
+            if not selected_items:
+                return
+            item_id = selected_items[0]
+
+        location = self._violation_locations.get(item_id)
+
+        if location is None:
+            return
+
+        file_path, line_number = location
+
+        if not os.path.isfile(file_path):
+            self._show_error(
+                f"Source file was not found:\n{file_path}"
+            )
+            return
+
+        self._open_source_at_line(file_path, line_number)
+
+    def _open_source_at_line(
+        self,
+        file_path: str,
+        line_number: int,
+    ) -> None:
+        try:
+            if sys.platform.startswith("win"):
+                vscode_path = shutil.which("code")
+
+                if vscode_path:
+                    subprocess.Popen(
+                        [
+                            vscode_path,
+                            "--goto",
+                            f"{file_path}:{line_number}:1",
+                        ],
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                    return
+
+                notepad_plus_plus_path = shutil.which("notepad++")
+
+                if notepad_plus_plus_path:
+                    subprocess.Popen(
+                        [
+                            notepad_plus_plus_path,
+                            f"-n{line_number}",
+                            file_path,
+                        ],
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                    return
+
+                os.startfile(file_path)  # type: ignore[attr-defined]
+                return
+
+            if sys.platform == "darwin":
+                vscode_path = shutil.which("code")
+
+                if vscode_path:
+                    subprocess.Popen(
+                        [
+                            vscode_path,
+                            "--goto",
+                            f"{file_path}:{line_number}:1",
+                        ]
+                    )
+                else:
+                    subprocess.Popen(["open", file_path])
+
+                return
+
+            vscode_path = shutil.which("code")
+
+            if vscode_path:
+                subprocess.Popen(
+                    [
+                        vscode_path,
+                        "--goto",
+                        f"{file_path}:{line_number}:1",
+                    ]
+                )
+            else:
+                subprocess.Popen(["xdg-open", file_path])
+
+        except Exception as exc:
+            self._show_error(
+                f"Unable to open source file:\n"
+                f"{file_path}\n\n"
+                f"{exc}"
+            )
+        
     def _write_error_reports(self, failed_files: List[dict], report_dir: Path, timestamp: str) -> None:
         """Write separate reports for files that could not be preprocessed, parsed, or scanned."""
         json_path = report_dir / f"complyc_scan_errors_{timestamp}.json"
@@ -630,7 +766,7 @@ pre { white-space: pre-wrap; background: #f8f8f8; border: 1px solid #ddd; paddin
     def _clear_tree(self) -> None:
         for item in self.tree.get_children():
             self.tree.delete(item)
-
+        self._violation_locations.clear()
     
     def _set_busy(self, busy: bool) -> None:
         def apply():
@@ -652,6 +788,18 @@ pre { white-space: pre-wrap; background: #f8f8f8; border: 1px solid #ddd; paddin
         else:
             messagebox.showinfo(APP_TITLE, "No HTML report is available yet. Run a scan first.")
 
+
+    def open_csv_report(self) -> None:
+        if self.last_csv_report and self.last_csv_report.exists():
+            if sys.platform.startswith("win"):
+                os.startfile(self.last_csv_report)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.run(["open", str(self.last_csv_report)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(self.last_csv_report)], check=False)
+        else:
+            messagebox.showinfo(APP_TITLE, "No CSV report is available yet. Run a scan first.")
+
     def clear_results(self) -> None:
         self._clear_tree()
 
@@ -660,6 +808,7 @@ pre { white-space: pre-wrap; background: #f8f8f8; border: 1px solid #ddd; paddin
 
         self.last_json_report = None
         self.last_html_report = None
+        self.last_csv_report = None
         self.last_error_report = None
     
     def open_error_report(self) -> None:

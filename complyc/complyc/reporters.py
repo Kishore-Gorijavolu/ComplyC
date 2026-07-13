@@ -4,6 +4,7 @@ reporters.py – JSON and HTML report generators for ComplyC
 
 from __future__ import annotations
 
+import csv
 import json
 import html
 from dataclasses import asdict
@@ -56,6 +57,35 @@ def write_json_report(per_file: Dict[str, List[Violation]], outfile: str):
         json.dump(data, f, indent=2)
     print(f"[ComplyC] JSON report written to {outfile}")
 
+
+
+def write_csv_report(per_file: Dict[str, List[Violation]], outfile: str):
+    """Write a flat CSV report suitable for Excel and issue tracking imports."""
+    fieldnames = [
+        "file",
+        "line",
+        "rule_id",
+        "severity",
+        "message",
+        "reference",
+    ]
+
+    with open(outfile, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+
+        for file_path, violations in per_file.items():
+            for violation in violations:
+                writer.writerow({
+                    "file": file_path,
+                    "line": violation.line if violation.line is not None else "",
+                    "rule_id": violation.rule_id,
+                    "severity": violation.severity or "unspecified",
+                    "message": violation.message,
+                    "reference": violation.reference or "",
+                })
+
+    print(f"[ComplyC] CSV report written to {outfile}")
 
 def write_html_report(per_file: Dict[str, List[Violation]], outfile: str):
     """Write a simple but clean HTML report."""
