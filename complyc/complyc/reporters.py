@@ -8,11 +8,11 @@ import csv
 import json
 import html
 from dataclasses import asdict
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 from collections import Counter
 
-from .rule_engine import Violation
+from .rule_engine import CHECK_HANDLERS, SUPPORTED_SCOPES, Violation
 
 
 def violations_to_dict(per_file: Dict[str, List[Violation]]):
@@ -87,7 +87,11 @@ def write_csv_report(per_file: Dict[str, List[Violation]], outfile: str):
 
     print(f"[ComplyC] CSV report written to {outfile}")
 
-def write_html_report(per_file: Dict[str, List[Violation]], outfile: str):
+def write_html_report(
+    per_file: Dict[str, List[Violation]],
+    outfile: str,
+    rules: Optional[List[Dict[str, Any]]] = None,
+):
     """Write a simple but clean HTML report."""
     data = violations_to_dict(per_file)
 
@@ -270,6 +274,33 @@ h1, h2 { color: #333; }
   color: #0645ad;
 }
 
+.status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.status-findings {
+  background: #fff0e6;
+  color: #9a4d00;
+  border: 1px solid #f2c08f;
+}
+
+.status-compliant {
+  background: #eaf7ed;
+  color: #1f6f35;
+  border: 1px solid #a9d7b4;
+}
+
+.status-not-evaluated {
+  background: #f1f1f1;
+  color: #555;
+  border: 1px solid #cfcfcf;
+}
+
 .percent-cell {
   min-width: 210px;
 }
@@ -374,8 +405,9 @@ h1, h2 { color: #333; }
     # This keeps the percentage bounded from 0% to 100% and avoids treating
     # raw violation count as a compliance percentage.
     limited_security_rules = {
-        "SAFETY_FORBIDDEN_API_001": "Unsafe C APIs",
+        "SAFETY_FORBIDDEN_API_001": "Unsafe / Restricted C APIs",
         "SAFETY_DYNAMIC_MEM_001": "Dynamic Memory",
+        "SAFETY_RECURSION_001": "Recursion",
     }
 
     failed_security_pairs = set()
@@ -413,10 +445,57 @@ h1, h2 { color: #333; }
         0.0, min(100.0, security_noncompliant_pct)
     )
 
-    # Build complete rule summary once. This data powers both the pie chart
-    # and the detailed table below it.
+    # Build complete rule summary once. The table is seeded from the
+    # configured YAML rules, not only from returned violations. This means
+    # zero-finding rules remain visible and reviewers can distinguish:
+    #
+    #   - Evaluated / Findings
+    #   - Evaluated / Compliant
+    #   - Configured / Not Evaluated
+    #
+    # A rule is considered executable when its scope is supported and its
+    # handler is registered in CHECK_HANDLERS.
+    configured_rules = rules or []
     rule_summary = {}
 
+    for configured_rule in configured_rules:
+        rule_id = configured_rule.get("id") or "UNSPECIFIED_RULE"
+        scope = configured_rule.get("scope", "file")
+        check_name = configured_rule.get("check")
+
+        executable = (
+            scope in SUPPORTED_SCOPES
+            and bool(check_name)
+            and check_name in CHECK_HANDLERS
+        )
+
+        if not executable:
+            reasons = []
+            if scope not in SUPPORTED_SCOPES:
+                reasons.append(f"unsupported scope: {scope}")
+            if not check_name:
+                reasons.append("missing check handler")
+            elif check_name not in CHECK_HANDLERS:
+                reasons.append(f"unknown handler: {check_name}")
+            evaluation_note = "; ".join(reasons) or "not evaluated"
+        else:
+            evaluation_note = ""
+
+        rule_summary[rule_id] = {
+            "title": configured_rule.get("title") or "",
+            "scope": scope,
+            "handler": check_name or "",
+            "evaluated": executable,
+            "evaluation_note": evaluation_note,
+            "total": 0,
+            "critical": 0,
+            "major": 0,
+            "minor": 0,
+            "unspecified": 0,
+        }
+
+    # Count actual violations. If write_html_report() is called without rule
+    # metadata, retain backward-compatible behavior by adding encountered rules.
     for file_entry in data["files"]:
         for violation in file_entry["violations"]:
             rule_id = violation.get("rule_id") or "UNSPECIFIED_RULE"
@@ -424,6 +503,11 @@ h1, h2 { color: #333; }
 
             if rule_id not in rule_summary:
                 rule_summary[rule_id] = {
+                    "title": "",
+                    "scope": "",
+                    "handler": "",
+                    "evaluated": True,
+                    "evaluation_note": "",
                     "total": 0,
                     "critical": 0,
                     "major": 0,
@@ -435,6 +519,23 @@ h1, h2 { color: #333; }
             rule_summary[rule_id][severity] = (
                 rule_summary[rule_id].get(severity, 0) + 1
             )
+
+    evaluated_rule_count = sum(
+        1 for counts in rule_summary.values() if counts.get("evaluated")
+    )
+    finding_rule_count = sum(
+        1
+        for counts in rule_summary.values()
+        if counts.get("evaluated") and counts.get("total", 0) > 0
+    )
+    compliant_rule_count = sum(
+        1
+        for counts in rule_summary.values()
+        if counts.get("evaluated") and counts.get("total", 0) == 0
+    )
+    not_evaluated_rule_count = sum(
+        1 for counts in rule_summary.values() if not counts.get("evaluated")
+    )
 
     # -----------------------------------------------------------------
     # Security compliance pie
@@ -596,8 +697,19 @@ h1, h2 { color: #333; }
         f"{severity_total}</strong></p>"
     )
     html_parts.append(
-        "<p class='chart-note'>Detailed rule-level findings are listed below.</p>"
+        "<p class='chart-note'>"
+        f"<strong>{evaluated_rule_count}</strong> rules evaluated: "
+        f"<strong>{finding_rule_count}</strong> with findings and "
+        f"<strong>{compliant_rule_count}</strong> with zero findings."
+        "</p>"
     )
+    if not_evaluated_rule_count:
+        html_parts.append(
+            "<p class='chart-note'>"
+            f"<strong>{not_evaluated_rule_count}</strong> configured rule(s) "
+            "were not evaluated and are identified in the detailed table below."
+            "</p>"
+        )
     html_parts.append("</div></div></section>")
     html_parts.append("</div>")
 
@@ -611,6 +723,7 @@ h1, h2 { color: #333; }
         html_parts.append(
             "<tr>"
             "<th>Rule ID</th>"
+            "<th>Status</th>"
             "<th>Total</th>"
             "<th>Critical</th>"
             "<th>Major</th>"
@@ -655,9 +768,30 @@ h1, h2 { color: #333; }
             else:
                 bar_color = "#9e9e9e"
 
+            if not counts.get("evaluated"):
+                status_html = (
+                    "<span class='status-badge status-not-evaluated'>"
+                    "NOT EVALUATED</span>"
+                )
+                status_title = counts.get("evaluation_note") or "Not evaluated"
+            elif counts.get("total", 0) > 0:
+                status_html = (
+                    "<span class='status-badge status-findings'>"
+                    "FINDINGS</span>"
+                )
+                status_title = "Rule evaluated and one or more findings were reported."
+            else:
+                status_html = (
+                    "<span class='status-badge status-compliant'>"
+                    "COMPLIANT</span>"
+                )
+                status_title = "Rule evaluated with zero findings."
+
             html_parts.append(
                 "<tr>"
-                f"<td class='rule-id'>{html.escape(rule_id)}</td>"
+                f"<td class='rule-id' title='{html.escape(counts.get('title') or '')}'>"
+                f"{html.escape(rule_id)}</td>"
+                f"<td title='{html.escape(status_title)}'>{status_html}</td>"
                 f"<td>{counts.get('total', 0)}</td>"
                 f"<td>{counts.get('critical', 0)}</td>"
                 f"<td>{counts.get('major', 0)}</td>"
@@ -678,6 +812,7 @@ h1, h2 { color: #333; }
         html_parts.append(
             "<tr style='font-weight:bold; background:#f5f5f5;'>"
             "<td>TOTAL</td>"
+            f"<td>{evaluated_rule_count} evaluated</td>"
             f"<td>{total_counts['total']}</td>"
             f"<td>{total_counts['critical']}</td>"
             f"<td>{total_counts['major']}</td>"

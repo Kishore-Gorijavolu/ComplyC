@@ -41,7 +41,7 @@ rules:
   - id: NAMING_MACRO_001
     title: "Macros must be UPPER_SNAKE_CASE"
     scope: macro
-    check: regex
+    check: macro_naming
     pattern: "^[A-Z][A-Z0-9_]*$"
     severity: major
     guidance: "Use upper_snake_case for macro names."

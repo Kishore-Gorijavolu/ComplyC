@@ -261,6 +261,70 @@ def resolve_numeric_literal_location(cn: c_ast.Constant, ctx) -> Optional[Tuple[
 
 # ---------- core checks ----------
 
+def check_macro_naming(node, rule, ctx) -> List[Violation]:
+    """
+    Validate object-like and function-like #define names against the rule regex.
+
+    Macro definitions are intentionally scanned from the original source file
+    rather than the pycparser AST because preprocessing removes #define
+    directives before AST construction.
+
+    Multi-line macro bodies are handled naturally because only the first
+    #define line is used to obtain the macro identifier.
+    """
+    if not isinstance(node, c_ast.FileAST):
+        return []
+
+    pattern = rule.get("pattern")
+    if not pattern:
+        return []
+
+    try:
+        regex = re.compile(pattern)
+    except re.error as exc:
+        print(
+            f"[ComplyC] WARNING: Rule {rule.get('id', '<unknown>')} has invalid "
+            f"regex pattern '{pattern}': {exc}"
+        )
+        return []
+
+    violations: List[Violation] = []
+    file_path = ctx["file_path"]
+    file_lines = ctx.get("file_lines", [])
+
+    # Accept whitespace before '#', whitespace between '#' and 'define',
+    # object-like macros, and function-like macros.
+    define_re = re.compile(
+        r"^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)"
+    )
+
+    for line_number, source_line in enumerate(file_lines, start=1):
+        match = define_re.match(source_line)
+        if match is None:
+            continue
+
+        macro_name = match.group(1)
+
+        if regex.match(macro_name):
+            continue
+
+        violations.append(
+            Violation(
+                rule_id=rule["id"],
+                message=(
+                    f"Macro '{macro_name}' does not match pattern '{pattern}'. "
+                    f"{rule.get('guidance', '')}"
+                ),
+                file=file_path,
+                line=line_number,
+                severity=rule.get("severity"),
+                reference=rule.get("reference"),
+            )
+        )
+
+    return violations
+
+
 def check_regex(node, rule, ctx) -> List[Violation]:
     name = get_node_name(node)
     if not name:
@@ -1459,6 +1523,7 @@ def check_brace_own_line(node, rule, ctx) -> List[Violation]:
 # ---------- SUPPORTED_SCOPES ----------
 SUPPORTED_SCOPES = {
     "file",
+    "macro",
     "function",
     "condition",
     "switch_statement",
@@ -1483,6 +1548,7 @@ SUPPORTED_SCOPES = {
 
 CHECK_HANDLERS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], List[Violation]]] = {
     "regex": check_regex,
+    "macro_naming": check_macro_naming,
     "max_function_length": check_max_function_length,
     "max_parameter_count": check_max_parameter_count,
     "forbidden_functions": check_forbidden_functions,
@@ -1561,6 +1627,17 @@ def run_rules(ast: c_ast.FileAST, rules: List[Dict[str, Any]], file_path: str) -
                 f"[ComplyC] WARNING: Rule {rule_id} uses unknown check handler "
                 f"'{check_name}'. Rule skipped."
             )
+            continue
+
+        if scope == "macro":
+            # Preprocessor directives do not survive into the pycparser AST.
+            # Run macro checks once against the original source file.
+            try:
+                vio = handler(ast, rule, ctx_base)
+            except Exception as e:
+                print(f"[ComplyC] Error in rule {rule.get('id')}: {e}")
+                vio = []
+            all_violations.extend(vio)
             continue
 
         for node, extra in iter_nodes_by_scope(ast, scope):

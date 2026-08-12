@@ -580,7 +580,7 @@ class ComplyCGui(tk.Tk):
             error_report = report_dir / f"complyc_scan_errors_{timestamp}.html"
 
             write_json_report(per_file_violations, str(json_report))
-            write_html_report(per_file_violations, str(html_report))
+            write_html_report(per_file_violations, str(html_report), rules=rules)
             write_csv_report(per_file_violations, str(csv_report))
             self._write_error_reports(failed_files, report_dir, timestamp)
 

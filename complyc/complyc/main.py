@@ -162,7 +162,7 @@ def main():
         write_json_report(per_file_violations, json_path)
 
     if html_path:
-        write_html_report(per_file_violations, html_path)
+        write_html_report(per_file_violations, html_path, rules=rules)
 
 
 if __name__ == "__main__":
