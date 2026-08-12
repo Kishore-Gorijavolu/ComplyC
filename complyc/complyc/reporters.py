@@ -97,8 +97,14 @@ def write_html_report(per_file: Dict[str, List[Violation]], outfile: str):
     html_parts.append("<title>ComplyC Report</title>")
     html_parts.append("""
 <style>
-body { font-family: Arial, sans-serif; margin: 20px; }
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  color: #222;
+}
+
 h1, h2 { color: #333; }
+
 .dashboard {
   display: flex;
   flex-wrap: wrap;
@@ -127,25 +133,194 @@ h1, h2 { color: #333; }
   color: #555;
   margin-top: 4px;
 }
-.summary-table, .violations-table {
+
+/* ===== Two half-page summary panels ===== */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 10px 0 24px 0;
+}
+
+.overview-card {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fafafa;
+  padding: 16px;
+  min-width: 0;
+}
+
+.overview-title {
+  margin: 0 0 14px 0;
+  font-size: 22px;
+}
+
+.overview-subtitle {
+  font-size: 13px;
+  color: #777;
+  font-weight: normal;
+}
+
+.chart-layout {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.pie-wrap {
+  position: relative;
+  width: 210px;
+  height: 210px;
+  flex: 0 0 210px;
+}
+
+.pie-chart {
+  width: 210px;
+  height: 210px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+.pie-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  pointer-events: none;
+}
+
+.chart-details {
+  flex: 1;
+  min-width: 235px;
+}
+
+.chart-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chart-legend li {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 0;
+}
+
+.legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-value {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.chart-separator {
+  border: 0;
+  border-top: 1px solid #ccc;
+  margin: 14px 0;
+}
+
+.chart-note {
+  color: #555;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 10px 0 0 0;
+}
+
+.compliance-good {
+  color: #20813a;
+  font-weight: bold;
+}
+
+/* ===== Tables ===== */
+.summary-table,
+.violations-table {
   border-collapse: collapse;
   margin-bottom: 20px;
   width: 100%;
 }
-.summary-table th, .summary-table td,
-.violations-table th, .violations-table td {
+
+.summary-table th,
+.summary-table td,
+.violations-table th,
+.violations-table td {
   border: 1px solid #ccc;
   padding: 6px 8px;
   font-size: 14px;
 }
+
+.summary-table th,
 .violations-table th {
-  background-color: #f2f2f2;
+  background: #f2f2f2;
 }
+
+.rule-id {
+  color: #0645ad;
+}
+
+.percent-cell {
+  min-width: 210px;
+}
+
+.percent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.percent-track {
+  flex: 1;
+  min-width: 100px;
+  height: 10px;
+  background: #ececec;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.percent-fill {
+  height: 100%;
+  border-radius: 5px;
+}
+
+.percent-value {
+  width: 52px;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .severity-critical { color: #b30000; font-weight: bold; }
 .severity-major { color: #cc6600; font-weight: bold; }
 .severity-minor { color: #666600; }
 .severity-unspecified { color: #555; }
-.file-header { background: #e9f0fb; padding: 8px; margin-top: 20px; border-left: 4px solid #4a78c2; }
+
+.file-header {
+  background: #e9f0fb;
+  padding: 8px;
+  margin-top: 20px;
+  border-left: 4px solid #4a78c2;
+}
+
+@media (max-width: 950px) {
+  .overview-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  body { margin: 12px; }
+  .chart-layout { justify-content: center; }
+  .chart-details { min-width: 100%; }
+}
 </style>
 """)
     html_parts.append("</head><body>")
@@ -182,20 +357,64 @@ h1, h2 { color: #333; }
 
     html_parts.append("</div>")
 
-    # Summary section
-    #s = data["summary"]
-    html_parts.append("<h2>Summary</h2>")
-    html_parts.append("<table class='summary-table'>")
-    html_parts.append("<tr><th>Total files</th><td>{}</td></tr>".format(s["total_files"]))
-    html_parts.append("<tr><th>Total violations</th><td>{}</td></tr>".format(s["total_violations"]))
-    html_parts.append("<tr><th>Violations by severity</th><td><ul>")
-    for sev, count in s["by_severity"].items():
-        cls = f"severity-{sev.lower()}"
-        html_parts.append(f"<li class='{cls}'>{html.escape(sev)}: {count}</li>")
-    html_parts.append("</ul></td></tr>")
-    html_parts.append("</table>")
+    # -----------------------------------------------------------------
+    # Summary chart data
+    # -----------------------------------------------------------------
 
-    # Rule summary section
+    # Limited security-oriented rules currently implemented in this beta.
+    #
+    # Compliance is calculated using FILE x RULE opportunities:
+    #
+    #   opportunities = scanned_files * limited_security_rule_count
+    #
+    # A file/rule opportunity is marked non-compliant when at least one
+    # violation of that rule is reported for that file. Multiple findings
+    # of the same rule in the same file still represent one failed check.
+    #
+    # This keeps the percentage bounded from 0% to 100% and avoids treating
+    # raw violation count as a compliance percentage.
+    limited_security_rules = {
+        "SAFETY_FORBIDDEN_API_001": "Unsafe C APIs",
+        "SAFETY_DYNAMIC_MEM_001": "Dynamic Memory",
+    }
+
+    failed_security_pairs = set()
+    security_finding_count = 0
+
+    for file_entry in data["files"]:
+        file_path = file_entry["file"]
+
+        for violation in file_entry["violations"]:
+            rule_id = violation.get("rule_id") or ""
+
+            if rule_id in limited_security_rules:
+                failed_security_pairs.add((file_path, rule_id))
+                security_finding_count += 1
+
+    security_rule_count = len(limited_security_rules)
+    security_opportunities = s["total_files"] * security_rule_count
+    failed_security_checks = len(failed_security_pairs)
+    compliant_security_checks = max(
+        security_opportunities - failed_security_checks, 0
+    )
+
+    if security_opportunities > 0:
+        security_noncompliant_pct = (
+            failed_security_checks / security_opportunities
+        ) * 100.0
+        security_compliant_pct = 100.0 - security_noncompliant_pct
+    else:
+        # With no files there is nothing meaningful to score.
+        security_compliant_pct = 100.0
+        security_noncompliant_pct = 0.0
+
+    security_compliant_pct = max(0.0, min(100.0, security_compliant_pct))
+    security_noncompliant_pct = max(
+        0.0, min(100.0, security_noncompliant_pct)
+    )
+
+    # Build complete rule summary once. This data powers both the pie chart
+    # and the detailed table below it.
     rule_summary = {}
 
     for file_entry in data["files"]:
@@ -213,9 +432,179 @@ h1, h2 { color: #333; }
                 }
 
             rule_summary[rule_id]["total"] += 1
-            rule_summary[rule_id][severity] = rule_summary[rule_id].get(severity, 0) + 1
+            rule_summary[rule_id][severity] = (
+                rule_summary[rule_id].get(severity, 0) + 1
+            )
 
-    html_parts.append("<h2>Rule Summary</h2>")
+    # -----------------------------------------------------------------
+    # Security compliance pie
+    # -----------------------------------------------------------------
+    compliant_color = "#28a745"
+    noncompliant_color = "#dc3545"
+
+    if security_noncompliant_pct <= 0.0:
+        security_gradient = f"{compliant_color} 0% 100%"
+    elif security_compliant_pct <= 0.0:
+        security_gradient = f"{noncompliant_color} 0% 100%"
+    else:
+        security_gradient = (
+            f"{compliant_color} 0% {security_compliant_pct:.2f}%, "
+            f"{noncompliant_color} {security_compliant_pct:.2f}% 100%"
+        )
+
+    # -----------------------------------------------------------------
+    # Rule severity pie
+    # -----------------------------------------------------------------
+    severity_counts = {
+        "Critical": critical_count,
+        "Major": major_count,
+        "Minor": minor_count,
+        "Unspecified": unspecified_count,
+    }
+
+    severity_colors = {
+        "Critical": "#e53935",
+        "Major": "#fb8c00",
+        "Minor": "#fbc02d",
+        "Unspecified": "#9e9e9e",
+    }
+
+    severity_total = sum(severity_counts.values())
+    severity_gradient_parts = []
+    severity_legend_parts = []
+    severity_cursor = 0.0
+
+    for label in ("Critical", "Major", "Minor", "Unspecified"):
+        count = severity_counts[label]
+        pct = (count / severity_total * 100.0) if severity_total else 0.0
+        color = severity_colors[label]
+
+        if count > 0:
+            start_pct = severity_cursor
+            severity_cursor += pct
+            severity_gradient_parts.append(
+                f"{color} {start_pct:.2f}% {severity_cursor:.2f}%"
+            )
+
+        severity_legend_parts.append(
+            "<li>"
+            f"<span class='legend-dot' style='background:{color};'></span>"
+            f"<span>{html.escape(label)}</span>"
+            f"<span class='legend-value'>{pct:.1f}% ({count})</span>"
+            "</li>"
+        )
+
+    severity_gradient = (
+        ", ".join(severity_gradient_parts)
+        if severity_gradient_parts
+        else "#d9d9d9 0% 100%"
+    )
+
+    # -----------------------------------------------------------------
+    # Two half-page cards
+    # -----------------------------------------------------------------
+    html_parts.append("<div class='overview-grid'>")
+
+    # LEFT CARD
+    html_parts.append("<section class='overview-card'>")
+    html_parts.append(
+        "<h2 class='overview-title'>"
+        "Security-Oriented Findings "
+        "<span class='overview-subtitle'>(Limited Beta Checks)</span>"
+        "</h2>"
+    )
+    html_parts.append("<div class='chart-layout'>")
+    html_parts.append("<div class='pie-wrap'>")
+    html_parts.append(
+        f"<div class='pie-chart' "
+        f"style='background:conic-gradient({security_gradient});'></div>"
+    )
+    html_parts.append(
+        f"<div class='pie-center'>{security_compliant_pct:.1f}%</div>"
+    )
+    html_parts.append("</div>")
+
+    html_parts.append("<div class='chart-details'>")
+    html_parts.append("<ul class='chart-legend'>")
+    html_parts.append(
+        "<li>"
+        f"<span class='legend-dot' style='background:{compliant_color};'></span>"
+        "<span>Compliant</span>"
+        f"<span class='legend-value'>{security_compliant_pct:.1f}% "
+        f"({compliant_security_checks})</span>"
+        "</li>"
+    )
+    html_parts.append(
+        "<li>"
+        f"<span class='legend-dot' style='background:{noncompliant_color};'></span>"
+        "<span>Not Compliant</span>"
+        f"<span class='legend-value'>{security_noncompliant_pct:.1f}% "
+        f"({failed_security_checks})</span>"
+        "</li>"
+    )
+    html_parts.append("</ul>")
+    html_parts.append("<hr class='chart-separator'>")
+
+    if failed_security_checks == 0:
+        html_parts.append(
+            "<p class='chart-note compliance-good'>"
+            "Excellent! No violations were detected by the limited "
+            "security-oriented checks enabled in this scan."
+            "</p>"
+        )
+    else:
+        html_parts.append(
+            "<p class='chart-note'>"
+            f"{failed_security_checks} of {security_opportunities} "
+            "limited security file/rule checks were non-compliant. "
+            f"{security_finding_count} security-oriented violation(s) "
+            "were reported."
+            "</p>"
+        )
+
+    html_parts.append(
+        "<p class='chart-note'>"
+        "This percentage applies only to the limited security-oriented "
+        "checks currently implemented in ComplyC Beta. It does not mean "
+        "the analyzed software is free of cybersecurity vulnerabilities."
+        "</p>"
+    )
+    html_parts.append("</div></div></section>")
+
+    # RIGHT CARD
+    html_parts.append("<section class='overview-card'>")
+    html_parts.append(
+        "<h2 class='overview-title'>Rule Summary Findings</h2>"
+    )
+    html_parts.append("<div class='chart-layout'>")
+    html_parts.append("<div class='pie-wrap'>")
+    html_parts.append(
+        f"<div class='pie-chart' "
+        f"style='background:conic-gradient({severity_gradient});'></div>"
+    )
+    html_parts.append(
+        f"<div class='pie-center'>{severity_total}</div>"
+    )
+    html_parts.append("</div>")
+    html_parts.append("<div class='chart-details'>")
+    html_parts.append("<ul class='chart-legend'>")
+    html_parts.extend(severity_legend_parts)
+    html_parts.append("</ul>")
+    html_parts.append("<hr class='chart-separator'>")
+    html_parts.append(
+        f"<p class='chart-note'><strong>Total Violations: "
+        f"{severity_total}</strong></p>"
+    )
+    html_parts.append(
+        "<p class='chart-note'>Detailed rule-level findings are listed below.</p>"
+    )
+    html_parts.append("</div></div></section>")
+    html_parts.append("</div>")
+
+    # -----------------------------------------------------------------
+    # Detailed Rule Summary
+    # -----------------------------------------------------------------
+    html_parts.append("<h2>Rule Summary (Details)</h2>")
 
     if rule_summary:
         html_parts.append("<table class='summary-table'>")
@@ -227,6 +616,7 @@ h1, h2 { color: #333; }
             "<th>Major</th>"
             "<th>Minor</th>"
             "<th>Unspecified</th>"
+            "<th>% of Total</th>"
             "</tr>"
         )
 
@@ -249,14 +639,39 @@ h1, h2 { color: #333; }
             total_counts["minor"] += counts.get("minor", 0)
             total_counts["unspecified"] += counts.get("unspecified", 0)
 
+            rule_pct = (
+                counts.get("total", 0) / s["total_violations"] * 100.0
+                if s["total_violations"]
+                else 0.0
+            )
+
+            # Bar color reflects the highest severity present for the rule.
+            if counts.get("critical", 0):
+                bar_color = "#e53935"
+            elif counts.get("major", 0):
+                bar_color = "#fb8c00"
+            elif counts.get("minor", 0):
+                bar_color = "#fbc02d"
+            else:
+                bar_color = "#9e9e9e"
+
             html_parts.append(
                 "<tr>"
-                f"<td>{html.escape(rule_id)}</td>"
+                f"<td class='rule-id'>{html.escape(rule_id)}</td>"
                 f"<td>{counts.get('total', 0)}</td>"
                 f"<td>{counts.get('critical', 0)}</td>"
                 f"<td>{counts.get('major', 0)}</td>"
                 f"<td>{counts.get('minor', 0)}</td>"
                 f"<td>{counts.get('unspecified', 0)}</td>"
+                "<td class='percent-cell'>"
+                "<div class='percent-row'>"
+                "<div class='percent-track'>"
+                f"<div class='percent-fill' "
+                f"style='width:{rule_pct:.2f}%; background:{bar_color};'></div>"
+                "</div>"
+                f"<span class='percent-value'>{rule_pct:.1f}%</span>"
+                "</div>"
+                "</td>"
                 "</tr>"
             )
 
@@ -268,6 +683,15 @@ h1, h2 { color: #333; }
             f"<td>{total_counts['major']}</td>"
             f"<td>{total_counts['minor']}</td>"
             f"<td>{total_counts['unspecified']}</td>"
+            "<td class='percent-cell'>"
+            "<div class='percent-row'>"
+            "<div class='percent-track'>"
+            "<div class='percent-fill' "
+            "style='width:100%; background:#2f67c7;'></div>"
+            "</div>"
+            "<span class='percent-value'>100%</span>"
+            "</div>"
+            "</td>"
             "</tr>"
         )
 
