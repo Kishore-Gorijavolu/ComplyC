@@ -1,4 +1,4 @@
-# Stable Verification - v0.2.4
+# Stable Verification - v0.9.0-beta
 
 Verification performed before packaging:
 

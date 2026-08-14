@@ -6,7 +6,7 @@ __attribute__((section(".main_function"))) void TIMG1_IRQHandler(void)
     x++;
 }
 
-__attribute__((noinline)) void Casco_TIMG1_IRQHandler(void)
+__attribute__((noinline)) void Test_TIMG1_IRQHandler(void)
 {
     TIMG1_IRQHandler();
 }
