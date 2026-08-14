@@ -181,7 +181,6 @@ The current rule engine contains the following implemented handlers:
 | `file_header_contains` | Checks whether required information is present in the source-file header. |
 | `max_cyclomatic_complexity` | Calculates function cyclomatic complexity and reports values above the configured threshold. |
 | `max_nesting_depth` | Reports functions whose control-flow nesting exceeds the configured depth. |
-| `magic_number` | Provides rule-engine support for detecting configured numeric-literal/magic-number usage. |
 | `no_assignment_in_condition` | Detects assignments used inside conditional expressions. |
 | `switch_requires_default` | Checks that a `switch` statement contains a `default` label. |
 | `no_empty_statement` | Detects empty statements in supported control-flow constructs. |
@@ -288,7 +287,6 @@ The supplied YAML also contains rules that are planned/configured but are not cu
 
 | Rule ID | Reason |
 |---|---|
-| `NAMING_MACRO_001` | Uses the `macro` scope, which is not currently in the rule engine's supported scope set. |
 | `DOC_FUNC_001` | References the `preceding_comment` handler, which is not currently registered in `CHECK_HANDLERS`. |
 | `FIXEDPOINT_COMMENT_001` | Uses the unsupported `expression` scope and references `binary_point_comment_required`, which is not currently registered. |
 | `FORMAT_INDENT_001` | References `consistent_indentation`, which is not currently registered in `CHECK_HANDLERS`. |

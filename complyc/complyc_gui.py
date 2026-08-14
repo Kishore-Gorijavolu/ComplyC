@@ -30,7 +30,7 @@ from complyc.reporters import write_csv_report, write_json_report, write_html_re
 
 
 APP_TITLE = "ComplyC GUI"
-APP_VERSION = "0.2.1"
+APP_VERSION = "0.9.0-beta"
 
 
 def app_base_dir() -> Path:

@@ -78,14 +78,14 @@ rules:
     guidance: "Use standard file header."
     reference: "§2.1 File Header Template"
 
-  - id: DOC_FUNC_001
-    title: "Public functions must have Doxygen header"
-    scope: function
-    check: preceding_comment
-    requires_doxygen: true
-    severity: major
-    guidance: "Document public API functions."
-    reference: "§4.1 Function Documentation"
+  # - id: DOC_FUNC_001
+  #   title: "Public functions must have Doxygen header"
+  #   scope: function
+  #   check: preceding_comment
+  #   requires_doxygen: true
+  #   severity: major
+  #   guidance: "Document public API functions."
+  #   reference: "§4.1 Function Documentation"
 
   # - id: MAGIC_NUMBER_001
   #   title: "Magic numbers must be replaced with named constants"
@@ -96,21 +96,21 @@ rules:
   #   guidance: "Replace literals with constants."
   #   reference: "§8.1 Magic Numbers"
 
-  - id: FIXEDPOINT_COMMENT_001
-    title: "Binary point changes must be documented"
-    scope: expression
-    check: binary_point_comment_required
-    severity: minor
-    guidance: "Document binary point transitions."
-    reference: "§7.2 Changing Binary Point"
+  # - id: FIXEDPOINT_COMMENT_001
+  #   title: "Binary point changes must be documented"
+  #   scope: expression
+  #   check: binary_point_comment_required
+  #   severity: minor
+  #   guidance: "Document binary point transitions."
+  #   reference: "§7.2 Changing Binary Point"
 
-  - id: FORMAT_INDENT_001
-    title: "Indentation must be consistent"
-    scope: function
-    check: consistent_indentation
-    severity: minor
-    guidance: "Use either tabs or spaces consistently."
-    reference: "§3 Indentation"
+  # - id: FORMAT_INDENT_001
+  #   title: "Indentation must be consistent"
+  #   scope: function
+  #   check: consistent_indentation
+  #   severity: minor
+  #   guidance: "Use either tabs or spaces consistently."
+  #   reference: "§3 Indentation"
 
   - id: FORMAT_BRACE_001
     title: "Curly braces required for all control bodies"
@@ -218,6 +218,7 @@ rules:
     severity: major
     guidance: "Reduce argument count."
     reference: "Industry Practice"
+
   # - id: UNINIT_VAR_001
   #   title: "Variable must be initialized before use"
   #   scope: file
@@ -241,6 +242,7 @@ rules:
   #   severity: minor
   #   guidance: "Remove unused variables or use them meaningfully to avoid confusion and reduce maintenance risk."
   #   reference: "Code quality guideline §4.2 Unused items"
+
   - id: MISRA_LITE_ASSIGN_COND_001
     title: "Assignment shall not be used in conditional expressions"
     scope: condition

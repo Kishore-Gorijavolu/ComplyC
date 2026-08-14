@@ -6,7 +6,7 @@
  *  Module Name: Clips.c
  * 
  *  Software Module : clips
- *	Author: Kishore Gorijavolu
+ *	Author: First_Name Last_Name
  *	Version: V0.1
  * 
  *  Description: The clip function returns the input value "inp" clipped between
