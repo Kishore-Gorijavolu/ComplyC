@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head><meta charset='UTF-8'>
+<title>ComplyC Report</title>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1, h2 { color: #333; }
+.summary-table, .violations-table {
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  width: 100%;
+}
+.summary-table th, .summary-table td,
+.violations-table th, .violations-table td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+.violations-table th {
+  background-color: #f2f2f2;
+}
+.severity-critical { color: #b30000; font-weight: bold; }
+.severity-major { color: #cc6600; font-weight: bold; }
+.severity-minor { color: #666600; }
+.severity-unspecified { color: #555; }
+.file-header { background: #e9f0fb; padding: 8px; margin-top: 20px; border-left: 4px solid #4a78c2; }
+</style>
+
+</head><body>
+<h1>ComplyC – Coding Style Report</h1>
+<h2>Summary</h2>
+<table class='summary-table'>
+<tr><th>Total files</th><td>1</td></tr>
+<tr><th>Total violations</th><td>3</td></tr>
+<tr><th>Violations by severity</th><td><ul>
+<li class='severity-major'>major: 1</li>
+<li class='severity-minor'>minor: 2</li>
+</ul></td></tr>
+</table>
+<div class='file-header'><h2>File: examples/sample_bad.c</h2>
+<p>Total violations: 3</p></div>
+<table class='violations-table'>
+<tr><th>Line</th><th>Rule ID</th><th>Severity</th><th>Message</th><th>Reference</th></tr>
+<tr><td>1</td><td>FILE_HEADER_001</td><td class='severity-major'>major</td><td>File is missing header entries: Module Name:, Description:, Author:, Version:. Use standard file header.</td><td>§2.1 File Header Template</td></tr>
+<tr><td>11</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;10&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+<tr><td>14</td><td>MAGIC_NUMBER_001</td><td class='severity-minor'>minor</td><td>Magic number &#x27;42&#x27; detected. Replace literals with constants.</td><td>§8.1 Magic Numbers</td></tr>
+</table>
+</body></html>
