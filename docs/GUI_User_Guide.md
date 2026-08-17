@@ -1,5 +1,8 @@
 # GUI User Guide
 
-> **Status:** Draft
->
-> Planned end-user documentation for the ComplyC graphical interface.
+For the current Community Beta, see:
+
+- `ComplyC_Getting_Started_Guide.pdf`
+- `README.md`
+
+A more detailed GUI reference will be added in a future release.

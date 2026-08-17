@@ -6,7 +6,7 @@ ComplyC is an open-source static analysis and coding-guideline compliance tool f
 
 ---
 
-## v0.9.0-beta - 2026-08-14
+## v0.9.0-beta - 2026-08-17
 
 ### Community Beta Release
 
